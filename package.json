@@ -1,0 +1,30 @@
+{
+  "name": "dancing-animals-video",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Şarkıya senkron dans eden hayvan figürlü çocuk videosu (Remotion)",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render DancingAnimals out/video.mp4",
+    "still": "remotion still DancingAnimals out/still.png --frame=60",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@esotericsoftware/spine-webgl": "4.3.13",
+    "@remotion/captions": "4.0.535",
+    "@remotion/cli": "4.0.535",
+    "@remotion/google-fonts": "4.0.535",
+    "@remotion/lottie": "4.0.535",
+    "@remotion/media-utils": "4.0.535",
+    "@remotion/transitions": "4.0.535",
+    "@rive-app/react-canvas": "4.36.0",
+    "lottie-web": "5.13.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.535"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

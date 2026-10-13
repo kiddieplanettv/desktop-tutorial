@@ -1,0 +1,9 @@
+# Ses analizi ve söz senkronu (Python 3.13)
+numpy
+librosa==1.0.0
+soundfile==0.14.0
+madmom @ git+https://github.com/CPJKU/madmom
+demucs==4.1.0
+whisperx==3.8.6
+torch==2.8.0
+torchaudio==2.8.0
