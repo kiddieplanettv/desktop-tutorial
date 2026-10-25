@@ -1,0 +1,58 @@
+{
+  "$comment": "Düzenlenebilir zamanlama dosyası. Sahne süresini değiştirmek için durationSec değerini düzenleyin; başlangıç/bitiş zamanları otomatik hesaplanır (boşluk veya siyah kare oluşmaz). Tren hızı ve buhar zamanları sahneye göre oransal (at: 0..1) tanımlıdır, bu yüzden sahne uzayıp kısalınca onlarla birlikte esner.",
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "audio": {
+    "$comment": "Şarkı henüz yok. Dosyayı public/audio/ klasörüne koyup src alanına 'audio/sarki.mp3' gibi yazın. startOffsetSec > 0 ise şarkı videoda geç başlar, < 0 ise şarkının başı kırpılır. bpm ve beatOffsetSec şarkı geldiğinde ölçülüp girilecek; null iken ritim hareketleri varsayılan yavaş tempo kullanır.",
+    "src": null,
+    "startOffsetSec": 0,
+    "volume": 1,
+    "bpm": null,
+    "beatOffsetSec": 0
+  },
+  "scenes": [
+    { "id": "s01", "durationSec": 10, "title": "İstasyonda günaydın", "summary": "Güneşli sabah, renkli istasyon. Uzakta sarı lokomotif. Pandi kameraya döner, gülümser, el sallar. Kamera yavaşça Pandi'ye yaklaşır." },
+    { "id": "s02", "durationSec": 10, "title": "Pandi sürücü koltuğunda", "summary": "Pandi lokomotife geçer, direksiyonu tutar. Tren hafifçe sallanır, bacadan üç buhar bulutu çıkar, tekerlekler yavaşça döner." },
+    { "id": "s03", "durationSec": 10, "title": "Tren yola çıkıyor", "summary": "Tren istasyondan ayrılır. Kamera yandan takip eder. Pandi pencereden el sallar, vagonlar sırayla kadraja girer." },
+    { "id": "s04", "durationSec": 10, "title": "Kırmızı çiçekler", "summary": "Kırmızı çiçek alanı. Kırmızı vagon öne çıkar. Pandi çiçekleri fark edip sevinir." },
+    { "id": "s05", "durationSec": 10, "title": "Kırmızı elmalar", "summary": "Büyük kırmızı elmalı ağaç. Pandi elmalara işaret eder. Kamera kısa süre elmalara yaklaşır." },
+    { "id": "s06", "durationSec": 10, "title": "Mavi göl", "summary": "Mavi gölün kıyısı. Mavi vagon öne çıkar. Gölde hafif dalgalar." },
+    { "id": "s07", "durationSec": 10, "title": "Küçük köprü", "summary": "Tren köprüden geçer, altında mavi su akar. Pandi gökyüzüne bakıp gülümser." },
+    { "id": "s08", "durationSec": 10, "title": "Sarı çiçekler ve civcivler", "summary": "Sarı çiçek alanı. Sarı vagon öne çıkar. Civcivler zıplar, Pandi el sallar." },
+    { "id": "s09", "durationSec": 10, "title": "Kanat çırpan civciv", "summary": "Bir civciv kanat çırpar, Pandi başını sallayarak selamlar. Tren devam eder." },
+    { "id": "s10", "durationSec": 10, "title": "Yeşil orman", "summary": "Tren yeşil ormana girer. Yeşil vagon öne çıkar. Tavşan ağacın arkasından çıkar." },
+    { "id": "s11", "durationSec": 10, "title": "Zıplayan tavşan", "summary": "Tavşan çimenlikte iki kez zıplar. Pandi sevinir. Tavşan durakta bekler." },
+    { "id": "s12", "durationSec": 10, "title": "Tavşan trene biniyor", "summary": "Tren küçük istasyonda durur. Tavşan açık vagona biner. Tren yeniden hareket eder." },
+    { "id": "s13", "durationSec": 10, "title": "Mor bahçe", "summary": "Mor çiçekli bahçe ve kelebekler. Mor vagon öne çıkar. Penguen istasyonda bekler." },
+    { "id": "s14", "durationSec": 10, "title": "Penguen trene biniyor", "summary": "Penguen sallanarak yürür ve vagona biner. Kamera Pandi, tavşan ve pengueni gösterir." },
+    { "id": "s15", "durationSec": 10, "title": "Turuncu balonlar", "summary": "Turuncu balonlu istasyon. Turuncu vagon öne çıkar. Yavru fil hortumuyla selam verir." },
+    { "id": "s16", "durationSec": 10, "title": "Fil trene biniyor", "summary": "Fil geniş vagona biner. Pandi arkadaşlarına bakar. Balonlar süzülür." },
+    { "id": "s17", "durationSec": 10, "title": "Çiçek tüneli", "summary": "Rengârenk çiçek tüneli. Renkler sırayla görünür. Tünelin sonunda güneşli manzara." },
+    { "id": "s18", "durationSec": 10, "title": "Gökkuşağı", "summary": "Tren tünelden çıkar, büyük gökkuşağı görünür. Geniş açı." },
+    { "id": "s19", "durationSec": 10, "title": "Gökkuşağının altında", "summary": "Tren gökkuşağının altından geçer. Her vagon kendi renginde hafifçe parlar. Herkes el sallar." },
+    { "id": "s20", "durationSec": 10, "title": "Final istasyonu", "summary": "Tren çiçekli final istasyonunda durur. Herkes iner, yan yana dizilir, dans eder." },
+    { "id": "s21", "durationSec": 10, "title": "Hoşça kalın", "summary": "Pandi ortada, arkadaşları etrafında. El sallama, dans, yıldız ve konfeti. Logo için temiz alan." }
+  ],
+  "train": {
+    "$comment": "Tren hızı (birim/sn) anahtar kareleri. at = sahne içindeki oran (0..1). Konum bu hızların integralidir, böylece sahneler arasında tren asla sıçramaz. anchor: trenin istasyonda durduğu an ve yol mesafesi.",
+    "speedKeys": [
+      { "scene": "s01", "at": 0.0, "v": 9 },
+      { "scene": "s01", "at": 0.85, "v": 0 },
+      { "scene": "s02", "at": 0.68, "v": 0 },
+      { "scene": "s02", "at": 1.0, "v": 1.6 },
+      { "scene": "s03", "at": 0.6, "v": 5.5 },
+      { "scene": "s21", "at": 1.0, "v": 5.5 }
+    ],
+    "anchor": { "scene": "s01", "at": 0.85, "distance": 308 }
+  },
+  "steam": {
+    "explicit": [
+      { "scene": "s02", "at": 0.5 },
+      { "scene": "s02", "at": 0.58 },
+      { "scene": "s02", "at": 0.66 }
+    ],
+    "autoFrom": { "scene": "s03", "at": 0.0 },
+    "autoEveryDistance": 2.6
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "kiddie-tv-pandi-renkli-tren",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kiddie TV — Pandi'nin Renkli Treni (Remotion + React Three Fiber)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "preview": "remotion studio src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "still": "node scripts/still.mjs",
+    "render:prototype": "node scripts/render.mjs --comp=Prototype20s",
+    "render:prototype:low": "node scripts/render.mjs --comp=Prototype20s --scale=0.5",
+    "render:full": "node scripts/render.mjs --comp=PandiTrain",
+    "render:full:low": "node scripts/render.mjs --comp=PandiTrain --scale=0.5",
+    "render:full:music": "node scripts/render.mjs --comp=PandiTrain --music"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.8.2",
+    "@remotion/bundler": "^4.0.538",
+    "@remotion/cli": "^4.0.538",
+    "@remotion/media-utils": "^4.0.538",
+    "@remotion/renderer": "^4.0.538",
+    "@remotion/three": "^4.0.538",
+    "@remotion/zod-types": "^4.0.538",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "^4.0.538",
+    "three": "^0.186.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2"
+  }
+}
