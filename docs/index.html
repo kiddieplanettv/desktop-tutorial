@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Miya Kasa Defteri</title>
+<meta name="theme-color" content="#2b3a75">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kasa Defteri">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --sunk:#eceef3; --line:#d9dce5;
+  --fg:#1b1f2e; --muted:#5d6377; --ink:#2b3a75;
+  --income:#1d8068; --expense:#cf5a2e; --expense-soft:#f8e4da;
+  --f-display:"Hiragino Mincho ProN","Noto Serif","Georgia","Times New Roman",serif;
+  --f-body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#12141c; --surface:#1b1e29; --sunk:#232736; --line:#323748;
+  --fg:#e8eaf2; --muted:#9aa0b5; --ink:#9fb0f0;
+  --income:#4cc3a2; --expense:#f08a5d; --expense-soft:#3d2519; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.5;font-variant-numeric:tabular-nums}
+.wrap{max-width:720px;margin:0 auto;padding-top:max(16px,env(safe-area-inset-top,0px));padding-bottom:max(40px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+h1,h2{margin:0}
+h1{font-family:var(--f-display);font-size:1.7rem}
+h2{font-size:1.05rem;font-weight:600}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.status{font-size:.8rem;color:var(--muted)}
+.status.bad{color:var(--expense)}
+button,input{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--surface);padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:500;min-height:44px}
+.btn.main{background:var(--ink);border-color:var(--ink);color:var(--surface);font-weight:600}
+.btn.wide{width:100%}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.daybar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center}
+.daybar .mid{display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}
+.daybar .mid b{font-size:1.15rem}
+.daybar input{border:none;background:none;color:var(--muted);font-size:.9rem;text-align:center}
+.arrow{width:44px;padding:0;font-size:1.3rem}
+.link{border:none;background:none;color:var(--ink);text-decoration:underline;cursor:pointer;font-size:.88rem;padding:2px}
+.sum{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center}
+@media (max-width:440px){.sum{grid-template-columns:minmax(0,1fr)}}
+.ring{position:relative;width:140px;height:140px;margin:0 auto}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .c b{font-size:1.7rem;line-height:1.1}
+.ring .c span{font-size:.8rem;color:var(--muted)}
+.nums{display:flex;flex-direction:column;gap:8px}
+.num{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.num span{color:var(--muted)}
+.num b{font-size:1.2rem}
+.num.total{border-top:1px solid var(--line);padding-top:8px}
+.num.total b{font-size:1.5rem}
+.pos{color:var(--income)} .neg{color:var(--expense)}
+.say{margin:0;font-size:.92rem;color:var(--muted)}
+.entry{display:flex;gap:8px;flex-wrap:wrap}
+.entry input{flex:1 1 140px;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;min-height:44px;font-size:16px}
+.tl{position:relative;flex:1 1 130px;min-width:0;display:flex}
+.tl input{padding-right:30px!important;text-align:right;width:100%}
+.tl::after{content:"₺";position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.msg{font-size:.86rem;color:var(--muted);min-height:1.2em;margin:0}
+.msg.ok{color:var(--income)} .msg.bad{color:var(--expense)}
+ul{list-style:none;margin:0;padding:0}
+.items li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.items .n{overflow-wrap:anywhere}
+.items .a{font-weight:600;color:var(--expense)}
+.del{border:none;background:none;color:var(--muted);cursor:pointer;width:40px;height:40px;border-radius:8px;font-size:1rem}
+.del:active{color:var(--expense);background:var(--expense-soft)}
+.empty{color:var(--muted);font-size:.9rem}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--sunk);border-radius:10px;padding:4px;gap:4px}
+.tabs button{border:none;background:none;padding:8px 4px;border-radius:7px;cursor:pointer;font-weight:500;color:var(--muted);min-height:40px}
+.tabs button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.three div{background:var(--sunk);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;min-width:0}
+.three span{font-size:.8rem;color:var(--muted)}
+.three b{font-size:1.1rem;overflow-wrap:anywhere}
+@media (max-width:440px){.three{grid-template-columns:minmax(0,1fr)}}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+#chart{width:100%;height:auto;display:block}
+#chart text{font-size:11px;fill:var(--muted);font-family:var(--f-body)}
+.backup{display:flex;flex-direction:column;gap:10px}
+.backup .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:360px){.backup .row{grid-template-columns:1fr}}
+.warn{background:var(--expense-soft);color:var(--fg);border-radius:10px;padding:10px 12px;font-size:.88rem;margin:0}
+#restoreFile{display:none}
+.confirm{display:flex;flex-direction:column;gap:8px;background:var(--sunk);border-radius:10px;padding:12px}
+.confirm .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Miya Kasa Defteri</h1>
+    <span id="status" class="status"></span>
+  </header>
+
+  <div class="card">
+    <div class="daybar">
+      <button id="prev" class="btn arrow" type="button" aria-label="Önceki gün">‹</button>
+      <div class="mid">
+        <b id="dayName">Bugün</b>
+        <input id="dayPick" type="date" aria-label="Gün seç">
+        <button id="toToday" class="link" type="button" hidden>Bugüne dön</button>
+      </div>
+      <button id="next" class="btn arrow" type="button" aria-label="Sonraki gün">›</button>
+    </div>
+    <div class="sum">
+      <div class="ring" aria-hidden="true">
+        <svg viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--sunk)" stroke-width="14"></circle>
+          <circle id="ringArc" cx="60" cy="60" r="50" fill="none" stroke="var(--income)" stroke-width="14" stroke-linecap="round" stroke-dasharray="0 314.16"></circle>
+        </svg>
+        <div class="c"><b id="ringPct">—</b><span id="ringLbl">kâr</span></div>
+      </div>
+      <div class="nums">
+        <div class="num"><span>Ciro</span><b id="dRev" class="pos">0 ₺</b></div>
+        <div class="num"><span>Gider</span><b id="dExp" class="neg">0 ₺</b></div>
+        <div class="num total"><span>Kâr</span><b id="dNet">0 ₺</b></div>
+      </div>
+    </div>
+    <p id="say" class="say"></p>
+  </div>
+
+  <form id="revForm" class="card" autocomplete="off">
+    <h2>1. Günün cirosu</h2>
+    <div class="entry">
+      <div class="tl"><input id="rev" inputmode="decimal" placeholder="Toplam ciro" aria-label="Günün toplam cirosu"></div>
+      <button class="btn main" type="submit">Kaydet</button>
+    </div>
+    <p id="revMsg" class="msg"></p>
+  </form>
+
+  <form id="expForm" class="card" autocomplete="off">
+    <h2>2. Alışverişler</h2>
+    <div class="entry">
+      <input id="eName" placeholder="Ne aldınız? (ör. Kıyma)" aria-label="Ne aldınız">
+      <div class="tl"><input id="eAmt" inputmode="decimal" placeholder="Tutar" aria-label="Tutar"></div>
+      <button class="btn main" type="submit">Ekle</button>
+    </div>
+    <p id="expMsg" class="msg"></p>
+    <ul id="items" class="items"></ul>
+  </form>
+
+  <div class="card">
+    <h2>Toplam görünüm</h2>
+    <div class="tabs" role="group" aria-label="Dönem">
+      <button type="button" data-mode="day" aria-pressed="false">Gün</button>
+      <button type="button" data-mode="week" aria-pressed="true">Hafta</button>
+      <button type="button" data-mode="month" aria-pressed="false">Ay</button>
+      <button type="button" data-mode="year" aria-pressed="false">Yıl</button>
+    </div>
+    <p id="range" class="say"></p>
+    <div class="three">
+      <div><span>Ciro</span><b id="pRev" class="pos">0 ₺</b></div>
+      <div><span>Gider</span><b id="pExp" class="neg">0 ₺</b></div>
+      <div><span>Kâr</span><b id="pNet">0 ₺</b></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--income)"></i>Ciro</span><span><i style="background:var(--expense)"></i>Gider</span><span><i style="background:var(--ink)"></i>Kâr</span></div>
+    <svg id="chart" viewBox="0 0 600 260" role="img" aria-label="Ciro, gider ve kâr grafiği"></svg>
+  </div>
+
+  <div class="card backup">
+    <h2>Yedekleme</h2>
+    <p class="say">Kayıtlarınız yalnızca bu telefonda saklanır. Telefon değişirse veya tarayıcı verileri silinirse kaybolmamaları için düzenli yedek alın.</p>
+    <p id="backupWarn" class="warn" hidden></p>
+    <div class="row">
+      <button id="backupBtn" class="btn main" type="button">Yedeği telefona kaydet</button>
+      <button id="restoreBtn" class="btn" type="button">Yedekten geri yükle</button>
+    </div>
+    <input id="restoreFile" type="file" accept=".json,application/json">
+    <div id="confirmBox" class="confirm" hidden>
+      <span id="confirmText"></span>
+      <div class="row">
+        <button id="confirmYes" class="btn main" type="button">Evet, geri yükle</button>
+        <button id="confirmNo" class="btn" type="button">Vazgeç</button>
+      </div>
+    </div>
+    <p id="backupMsg" class="msg"></p>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var STORE="miya.kasa.v1", BACKUP_AT="miya.kasa.lastBackup", MODE="miya.kasa.mode";
+var $=function(id){return document.getElementById(id)};
+var fmt=new Intl.NumberFormat("tr-TR",{style:"currency",currency:"TRY",maximumFractionDigits:0});
+function money(v){return fmt.format(Math.round(v||0))}
+function parseNum(s){s=String(s||"").trim().replace(/\s|₺/g,"");if(!s)return NaN;
+  if(s.indexOf(",")>=0)s=s.replace(/\./g,"").replace(",",".");else if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,"");
+  var n=Number(s);return isFinite(n)&&n>=0?n:NaN}
+
+/* dates (local) */
+function pad(n){return String(n).padStart(2,"0")}
+function key(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function fromKey(k){var p=k.split("-").map(Number);return new Date(p[0],p[1]-1,p[2])}
+function addDays(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n)}
+function weekStart(d){return addDays(d,-((d.getDay()+6)%7))}
+var MONTHS=["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+var MS=["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+var DAYS=["Pazar","Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi"];
+
+/* storage */
+var days={}, storageOk=true;
+function load(){try{var raw=localStorage.getItem(STORE);if(raw){var o=JSON.parse(raw);if(o&&o.days&&typeof o.days==="object")days=o.days}}catch(e){storageOk=false}}
+function persist(){try{localStorage.setItem(STORE,JSON.stringify({version:1,days:days}));return true}catch(e){storageOk=false;status("Kayıt yapılamadı: tarayıcı hafızası kapalı veya dolu",true);return false}}
+function getLS(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function setLS(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+load();
+if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(function(){})}
+
+var selected=key(new Date()), mode=getLS(MODE)||"week";
+if(["day","week","month","year"].indexOf(mode)<0)mode="week";
+function rev(d){return d&&+d.revenue||0}
+function exp(d){return d&&Array.isArray(d.items)?d.items.reduce(function(s,i){return s+(+i.amount||0)},0):0}
+function status(t,bad){$("status").textContent=t;$("status").className="status"+(bad?" bad":"")}
+function msg(id,t,cls){$(id).textContent=t;$(id).className="msg"+(cls?" "+cls:"")}
+
+/* day */
+var revTyping=false;
+function renderDay(){
+  var d=fromKey(selected),t=key(new Date());
+  var rel=selected===t?"Bugün":selected===key(addDays(new Date(),-1))?"Dün":DAYS[d.getDay()];
+  $("dayName").textContent=rel+", "+d.getDate()+" "+MONTHS[d.getMonth()];
+  $("dayPick").value=selected;$("toToday").hidden=selected===t;
+  var doc=days[selected],r=rev(doc),e=exp(doc),n=r-e,C=314.16,arc=$("ringArc");
+  $("dRev").textContent=money(r);$("dExp").textContent=money(e);
+  $("dNet").textContent=money(n);$("dNet").className=n<0?"neg":(r>0?"pos":"");
+  if(r>0){var p=n/r*100;
+    $("ringPct").textContent="%"+Math.round(Math.abs(p));$("ringLbl").textContent=p>=0?"kâr":"zarar";$("ringPct").className=p>=0?"pos":"neg";
+    arc.setAttribute("stroke",p>=0?"var(--income)":"var(--expense)");arc.setAttribute("stroke-dasharray",(Math.min(Math.abs(p),100)/100*C)+" "+C);
+    $("say").textContent=p>=0?"Ciroya göre kâr oranı: %"+Math.round(p)+". Her 100 ₺ satışın "+Math.round(p)+" ₺'si kâr.":"Gider ciroyu "+money(-n)+" aştı.";
+  }else{
+    $("ringPct").textContent="—";$("ringPct").className="";$("ringLbl").textContent="kâr";arc.setAttribute("stroke-dasharray","0 "+C);
+    $("say").textContent=e>0?"Kâr yüzdesini görmek için günün cirosunu girin.":"Henüz kayıt yok. Aşağıdan cironuzu ve alışverişlerinizi girin.";
+  }
+  if(!revTyping)$("rev").value=doc&&doc.revenue?String(doc.revenue).replace(".",","):"";
+  var ul=$("items");ul.textContent="";var list=(doc&&doc.items)||[];
+  if(!list.length){var li0=document.createElement("li");li0.className="empty";li0.style.display="block";li0.style.borderTop="none";li0.textContent="Bu gün için alışveriş girilmedi.";ul.appendChild(li0)}
+  list.forEach(function(it){var li=document.createElement("li");
+    var nm=document.createElement("span");nm.className="n";nm.textContent=it.name;
+    var a=document.createElement("span");a.className="a";a.textContent=money(it.amount);
+    var x=document.createElement("button");x.type="button";x.className="del";x.textContent="✕";x.setAttribute("aria-label",it.name+" sil");
+    x.addEventListener("click",function(){removeItem(it.id)});li.appendChild(nm);li.appendChild(a);li.appendChild(x);ul.appendChild(li)});
+}
+
+/* period */
+function bucket(k){var d=fromKey(k);
+  if(mode==="day")return k;if(mode==="week")return key(weekStart(d));
+  if(mode==="month")return d.getFullYear()+"-"+pad(d.getMonth()+1);return String(d.getFullYear())}
+function buckets(){var a=fromKey(selected),out=[],i;
+  if(mode==="day")for(i=13;i>=0;i--)out.push(key(addDays(a,-i)));
+  else if(mode==="week"){var w=weekStart(a);for(i=7;i>=0;i--)out.push(key(addDays(w,-7*i)))}
+  else if(mode==="month")for(i=11;i>=0;i--){var d=new Date(a.getFullYear(),a.getMonth()-i,1);out.push(d.getFullYear()+"-"+pad(d.getMonth()+1))}
+  else for(i=a.getFullYear()-4;i<=a.getFullYear();i++)out.push(String(i));
+  return out}
+function label(b,long){
+  if(mode==="day"){var d=fromKey(b);return d.getDate()+" "+(long?MONTHS:MS)[d.getMonth()]}
+  if(mode==="week"){var s=fromKey(b),e=addDays(s,6);return long?s.getDate()+" "+MONTHS[s.getMonth()]+" – "+e.getDate()+" "+MONTHS[e.getMonth()]:s.getDate()+" "+MS[s.getMonth()]}
+  if(mode==="month"){var p=b.split("-").map(Number);return long?MONTHS[p[1]-1]+" "+p[0]:MS[p[1]-1]}
+  return b}
+function niceStep(range){var raw=range/4,mag=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/mag;return (f<=1?1:f<=2?2:f<=5?5:10)*mag}
+var compact=new Intl.NumberFormat("tr-TR",{notation:"compact",maximumFractionDigits:1});
+function drawChart(bs,agg){
+  var svg=$("chart"),NS="http://www.w3.org/2000/svg";svg.textContent="";
+  var W=Math.max(280,Math.round(svg.getBoundingClientRect().width)||600),H=240,L=56,R=8,T=10,B=28,pw=W-L-R,ph=H-T-B;
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  var vals=[];bs.forEach(function(b){vals.push(agg[b].r,agg[b].e,agg[b].r-agg[b].e)});
+  var mx=Math.max.apply(null,vals.concat([0])),mn=Math.min.apply(null,vals.concat([0]));
+  if(mx===mn)mx=1000;var step=niceStep(mx-mn);mx=Math.ceil(mx/step)*step;mn=Math.floor(mn/step)*step;
+  function y(v){return T+ph-(v-mn)/(mx-mn)*ph}
+  function el(n,a,txt){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.appendChild(e);return e}
+  for(var v=mn;v<=mx+step/2;v+=step){el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:"var(--line)","stroke-width":v===0?1.5:1});
+    el("text",{x:L-6,y:y(v)+4,"text-anchor":"end"},compact.format(v)+" ₺")}
+  var n=bs.length,slot=pw/n,bw=Math.max(3,Math.min(18,slot*0.32)),every=Math.ceil(n/Math.max(3,Math.floor(pw/60)));
+  var pts=[];
+  bs.forEach(function(b,i){var cx=L+slot*i+slot/2,g=agg[b];
+    if(g.r>0)el("rect",{x:cx-bw-1,y:y(g.r),width:bw,height:Math.max(0,y(0)-y(g.r)),rx:2,fill:"var(--income)"});
+    if(g.e>0)el("rect",{x:cx+1,y:y(g.e),width:bw,height:Math.max(0,y(0)-y(g.e)),rx:2,fill:"var(--expense)"});
+    pts.push(cx+","+y(g.r-g.e));
+    if(i%every===0||i===n-1)el("text",{x:cx,y:H-8,"text-anchor":"middle"},label(b,false));
+  });
+  el("polyline",{points:pts.join(" "),fill:"none",stroke:"var(--ink)","stroke-width":2.5,"stroke-linejoin":"round"});
+  pts.forEach(function(p){var c=p.split(",");el("circle",{cx:c[0],cy:c[1],r:3,fill:"var(--ink)"})});
+}
+function renderPeriod(){
+  Array.prototype.forEach.call(document.querySelectorAll(".tabs button"),function(b){b.setAttribute("aria-pressed",String(b.dataset.mode===mode))});
+  var bs=buckets(),agg={};bs.forEach(function(b){agg[b]={r:0,e:0}});
+  Object.keys(days).forEach(function(k){var b=bucket(k);if(agg[b]){agg[b].r+=rev(days[k]);agg[b].e+=exp(days[k])}});
+  var cur=bs[bs.length-1],A=agg[cur],n=A.r-A.e;
+  $("range").textContent={day:"Seçili gün: ",week:"Bu hafta: ",month:"Bu ay: ",year:"Bu yıl: "}[mode]+label(cur,true)+(A.r>0?" · kâr oranı %"+Math.round(n/A.r*100):"");
+  $("pRev").textContent=money(A.r);$("pExp").textContent=money(A.e);$("pNet").textContent=money(n);$("pNet").className=n<0?"neg":(A.r>0?"pos":"");
+  drawChart(bs,agg);
+}
+
+/* backup reminder */
+function renderBackup(){
+  var has=Object.keys(days).length>0,last=getLS(BACKUP_AT),w=$("backupWarn");
+  if(!has){w.hidden=true;return}
+  if(!last){w.hidden=false;w.textContent="Henüz hiç yedek almadınız.";return}
+  var age=Math.floor((Date.now()-Number(last))/86400000);
+  if(age>=7){w.hidden=false;w.textContent="Son yedek "+age+" gün önce alındı. Yeni bir yedek almanız iyi olur."}
+  else{w.hidden=true;msg("backupMsg","Son yedek: "+new Date(Number(last)).toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"}))}
+}
+function render(){renderDay();renderPeriod();renderBackup()}
+
+/* entries */
+function base(k){var d=days[k];return d?JSON.parse(JSON.stringify(d)):{date:k,revenue:0,items:[]}}
+$("rev").addEventListener("input",function(){revTyping=true;msg("revMsg","")});
+$("revForm").addEventListener("submit",function(ev){ev.preventDefault();
+  var raw=$("rev").value.trim(),v=raw===""?0:parseNum(raw);
+  if(!isFinite(v)){msg("revMsg","Sadece sayı yazın, ör. 25000 veya 25.000","bad");return}
+  var b=base(selected);b.revenue=v;days[selected]=b;revTyping=false;
+  if(persist())msg("revMsg","Ciro kaydedildi.","ok");$("rev").blur();render()});
+$("expForm").addEventListener("submit",function(ev){ev.preventDefault();
+  var name=$("eName").value.trim(),v=parseNum($("eAmt").value);
+  if(!name){msg("expMsg","Ne aldığınızı yazın.","bad");$("eName").focus();return}
+  if(!isFinite(v)||v<=0){msg("expMsg","Tutarı sayı olarak yazın, ör. 1250","bad");$("eAmt").focus();return}
+  var b=base(selected);b.items.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name,amount:v});days[selected]=b;
+  $("eName").value="";$("eAmt").value="";
+  if(persist())msg("expMsg",name+" eklendi.","ok");render()});
+function removeItem(id){var b=base(selected);b.items=b.items.filter(function(i){return i.id!==id});days[selected]=b;if(persist())msg("expMsg","Silindi.","ok");render()}
+
+/* navigation */
+function go(k){selected=k;revTyping=false;msg("revMsg","");msg("expMsg","");render()}
+$("prev").addEventListener("click",function(){go(key(addDays(fromKey(selected),-1)))});
+$("next").addEventListener("click",function(){go(key(addDays(fromKey(selected),1)))});
+$("toToday").addEventListener("click",function(){go(key(new Date()))});
+$("dayPick").addEventListener("change",function(e){if(e.target.value)go(e.target.value)});
+Array.prototype.forEach.call(document.querySelectorAll(".tabs button"),function(b){b.addEventListener("click",function(){mode=b.dataset.mode;setLS(MODE,mode);renderPeriod()})});
+document.addEventListener("visibilitychange",function(){if(!document.hidden)render()});
+var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(renderPeriod,150)});
+
+/* backup: save file to phone */
+$("backupBtn").addEventListener("click",function(){
+  var data=JSON.stringify({app:"miya-kasa-defteri",version:1,createdAt:new Date().toISOString(),days:days},null,1);
+  var name="miya-yedek-"+key(new Date())+".json";
+  var blob=new Blob([data],{type:"application/json"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},2000);
+  setLS(BACKUP_AT,String(Date.now()));
+  msg("backupMsg",name+" dosyası telefonun İndirilenler klasörüne kaydedildi.","ok");$("backupWarn").hidden=true});
+
+/* restore */
+var pending=null;
+$("restoreBtn").addEventListener("click",function(){$("restoreFile").value="";$("restoreFile").click()});
+$("restoreFile").addEventListener("change",function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){try{var o=JSON.parse(r.result);
+      if(!o||o.app!=="miya-kasa-defteri"||!o.days||typeof o.days!=="object")throw new Error("bad");
+      pending=o.days;var cnt=Object.keys(pending).length;
+      $("confirmText").textContent="Bu yedekte "+cnt+" günlük kayıt var. Geri yüklerseniz telefondaki mevcut kayıtların yerini alır. Devam edilsin mi?";
+      $("confirmBox").hidden=false;msg("backupMsg","")}
+    catch(err){msg("backupMsg","Bu dosya bir Miya Kasa Defteri yedeği değil. \"miya-yedek-…json\" adlı dosyayı seçin.","bad")}};
+  r.onerror=function(){msg("backupMsg","Dosya okunamadı. Tekrar deneyin.","bad")};
+  r.readAsText(f)});
+$("confirmYes").addEventListener("click",function(){if(!pending)return;days=pending;pending=null;$("confirmBox").hidden=true;
+  if(persist())msg("backupMsg","Yedek geri yüklendi.","ok");go(key(new Date()))});
+$("confirmNo").addEventListener("click",function(){pending=null;$("confirmBox").hidden=true;msg("backupMsg","Geri yükleme iptal edildi.")});
+
+/* boot */
+render();
+if(!storageOk)status("Tarayıcı hafızası kapalı (gizli sekme olabilir)",true);
+if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(function(){})}
+})();
+</script>
+</body>
+</html>
