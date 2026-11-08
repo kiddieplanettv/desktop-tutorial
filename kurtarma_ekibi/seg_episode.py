@@ -1,0 +1,329 @@
+"""Rescue episode (55 s): police | ambulance | fire | tow.
+
+blender -b -P seg_episode.py -- <kind>
+"""
+import sys, os, math
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bpy
+from mathutils import Vector, Euler
+from lib import *
+
+KIND = sys.argv[sys.argv.index("--") + 1]
+IDX = dict(police=0, ambulance=1, fire=2, tow=3)[KIND]
+N = 1320
+D = 70.0
+FACE_CAM = math.radians(-90)  # animal facing -Y (toward the cameras)
+
+s = reset(N)
+st = standard_world(N, skip_zones=[(D - 16, -23, D + 52, -4.6), (D - 14, 4.6, D + 52, 21)])
+vs = park_vehicles(st)
+v = vs[IDX]
+dx = DOOR_X[IDX]
+
+# ---------------------------------------------------------------- 0-216: alarm
+flash(st["lamp"], 0, 216, period=10, on=12)
+bub = alert_bubble((10.9, 8.3, 9.2), 6, 96, face_rot=FACE_CAM)
+sfx(0, "alarm", dur=4.0)
+camA = camera("A", [(0, (10.9, -13, 3.5), (10.9, 9, 4.6)), (96, (10.9, -9.5, 3.2), (10.9, 9, 4.8))], lens=28)
+cut(0, camA)
+camB = camera("B", [(96, (dx + 0.3, 0.5, 1.7), (dx, 10, 1.6)), (216, (dx + 0.3, 2.3, 1.7), (dx, 10, 1.5))], lens=32)
+cut(96, camB)
+open_door(st, IDX, 100, 30)
+for e in v.eyes:
+    keys(e, "scale", [(0, (1, 1, 0.08)), (140, (1, 1, 0.08)), (148, (1, 1, 1))])
+sfx(142, "wake")
+blink(v.eyes, [178])
+
+stop = {"fire": (D + 1.8, 0.0), "tow": (D + 5.3, -1.9)}.get(KIND, (D - 7.0, 0.0))
+drive(v, [(216, (dx, STATION_Y + 3.6), -90), (252, (dx, 4.5), -90), (266, (dx + 2.2, 1.2), -45),
+          (280, (dx + 5.5, 0), 0), (570, stop, 0)])
+arrive = 570
+for i, m in enumerate(v.lights):
+    flash(m, 150, arrive + 60, period=10, on=10, phase=i)
+sfx(150, "siren_" + KIND, dur=(arrive - 150) / FPS)
+
+camC = camera("C", [(216, (dx + 9, -3.6, 1.4), (dx, 9, 1.4)), (300, (dx + 9.5, -3.6, 1.6), (dx + 9, 0, 1.2))], lens=30)
+cut(216, camC)
+camD = follow_cam("Dcam", v.root, 300, 480, offset=(-1.5, -9.5, 2.6), look_offset=(2.5, 0, 1.0), lens=32)
+cut(300, camD)
+ey, ez = (2.5, 2.4) if KIND == "fire" else (-3, 1.1)
+camE = camera("E", [(480, (D - 2.0, -14.0, 2.8 + (ez - 1.1)), (D - 2.5, ey, ez)), (600, (D - 2.0, -12.5, 2.6 + (ez - 1.1)), (D - 2.5, ey, ez))], lens=32)
+cut(480, camE)
+sfx(492, "sad")
+sfx(arrive + 8, "honk")
+
+# ---------------------------------------------------------------- rescue
+cel = {}
+
+if KIND == "police":
+    pup = make_animal("puppy", name="pup")
+    pup.root.location = (D, -5.5, 0)
+    pup.root.rotation_euler.z = FACE_CAM
+    mom = make_animal("puppy", scale=1.4, name="mom")
+    mom.root.location = (D + 31.5, -7.6, 0)
+    mom.root.rotation_euler.z = math.radians(-120)
+    set_mood(mom, 0, False)
+    doghouse((D + 34, -10, 0), rot=math.radians(90))
+    set_mood(pup, 0, False)
+    sad_pose(pup, 0, 640)
+    cry(pup, 480, 640)
+    happy_pose(pup, 640)
+    set_mood(pup, 642, True)
+    wag(pup, 640, N)
+    auto_blink(pup.eyes, 0, N, 3)
+    auto_blink(mom.eyes, 0, N, 4)
+    sfx(645, "bark")
+    P1 = camera("P1", [(600, (D - 4.5, -14.0, 2.4), (D - 2.0, -3.4, 1.0)), (700, (D - 5.0, -13.0, 2.6), (D - 3.0, -2.6, 1.1))], lens=32)
+    cut(600, P1)
+    # puppy hops onto the car's trunk
+    trunk_local = Vector((-1.3, 0, 1.25))
+    start = Vector((D, -5.5, 0))
+    end = Vector(stop + (0,)) + trunk_local
+    frames = list(range(660, 701, 2))
+    bake(pup.root, "location", frames, [tuple(start.lerp(end, ease((f - 660) / 40)) + Vector((0, 0, 1.6 * math.sin(math.pi * (f - 660) / 40)))) for f in frames])
+    keys(pup.root, "rotation_euler", [(660, (0, 0, FACE_CAM)), (700, (0, 0, 0))])
+    sfx(660, "boing")
+    drive(v, [(706, stop, 0), (850, (D + 27, 0), 0)])
+    frames = list(range(700, 861, 2))
+    vals = []
+    for f in frames:
+        p, r = world_pos(v.root, f)
+        o = trunk_local.copy()
+        o.rotate(Euler(r))
+        vals.append(tuple(p + o + Vector((0, 0, 0.05 * abs(math.sin(f * 0.6))))))
+    bake(pup.root, "location", frames, vals)
+    P2 = follow_cam("P2", v.root, 700, 860, offset=(-4.5, -8.5, 3.0), look_offset=(0.5, 0, 1.2), lens=32)
+    cut(700, P2)
+    # hop down next to mom
+    a = Vector(vals[-1]); b = Vector((D + 29.8, -6.6, 0))
+    frames = list(range(862, 897, 2))
+    bake(pup.root, "location", frames, [tuple(a.lerp(b, ease((f - 862) / 34)) + Vector((0, 0, 1.4 * math.sin(math.pi * (f - 862) / 34)))) for f in frames])
+    keys(pup.root, "rotation_euler", [(862, (0, 0, 0)), (896, (0, 0, math.radians(-30)))])
+    sfx(862, "boing")
+    set_mood(mom, 896, True)
+    happy_pose(mom, 896)
+    wag(mom, 896, N)
+    sfx(898, "bark")
+    hearts_burst((D + 30.6, -7.0, 2.0), 902, n=7, face_rot=FACE_CAM)
+    sfx(902, "love")
+    jump(mom.root, 910, n=2, h=0.6)
+    P3 = camera("P3", [(860, (D + 26.5, -17, 3.2), (D + 29, -5, 1.3)), (1200, (D + 27.5, -14.5, 2.8), (D + 29, -4.5, 1.2))], lens=32)
+    cut(860, P3)
+    cel = dict(f=960, center=(D + 29.5, -6.0, 0.6), animals=[pup, mom], end=(D + 27, 0), cam=P3)
+
+elif KIND == "ambulance":
+    bun = make_animal("bunny", name="bun")
+    bun.root.location = (D, -5.5, 0)
+    bun.root.rotation_euler.z = FACE_CAM
+    set_mood(bun, 0, False)
+    sad_pose(bun, 0, 760)
+    cry(bun, 480, 720)
+    auto_blink(bun.eyes, 0, N, 5)
+    A1 = camera("A1", [(600, (D - 3.5, -13.5, 2.3), (D - 3.5, -2.8, 0.9)), (720, (D - 3.2, -12.5, 2.2), (D - 3.2, -2.8, 0.9))], lens=30)
+    cut(600, A1)
+    kit, lid = medkit("kit", (D - 7, -1.2, 1.8))
+    key(kit, "scale", 0, (0.001,) * 3)
+    pop_in(kit, 628, 8)
+    sfx(628, "pop")
+    a = Vector((D - 7, -1.2, 1.8)); b = Vector((D - 0.9, -4.6, 0))
+    frames = list(range(640, 677, 2))
+    bake(kit, "location", frames, [tuple(a.lerp(b, ease((f - 640) / 36)) + Vector((0, 0, 2.2 * math.sin(math.pi * (f - 640) / 36)))) for f in frames])
+    keys(kit, "rotation_euler", [(640, (0, 0, 0)), (676, (0, 0, math.radians(-90)))])
+    sfx(640, "whoosh")
+    sfx(676, "thud")
+    keys(lid, "rotation_euler", [(688, (0, 0, 0)), (700, (0, math.radians(-115), 0))])
+    sfx(688, "open")
+    A2 = camera("A2", [(720, (D - 0.4, -11.8, 1.5), (D - 0.3, -5.5, 0.8)), (860, (D - 0.5, -11.0, 1.4), (D - 0.3, -5.5, 0.8))], lens=40)
+    cut(720, A2)
+    stars_burst((D - 0.3, -6.0, 0.6), 720, n=8, face_rot=FACE_CAM, radius=1.0)
+    sfx(720, "magic")
+    pop_in(bun.bandage, 736, 8)
+    pop_out(bun.bump, 734, 6)
+    happy_pose(bun, 760)
+    set_mood(bun, 762, True)
+    sfx(764, "giggle")
+    jump(bun.root, 790, n=3, h=0.5, period=14)
+    for f in (790, 804, 818):
+        sfx(f, "boing")
+    keys(lid, "rotation_euler", [(846, (0, math.radians(-115), 0)), (856, (0, 0, 0))])
+    frames = list(range(860, 891, 2))
+    bake(kit, "location", frames, [tuple(b.lerp(a, ease((f - 860) / 30)) + Vector((0, 0, 2.0 * math.sin(math.pi * (f - 860) / 30)))) for f in frames])
+    pop_out(kit, 890, 6)
+    sfx(860, "whoosh")
+    hearts_burst((D - 0.2, -5.6, 1.8), 870, n=6, face_rot=FACE_CAM)
+    sfx(870, "love")
+    A3 = camera("A3", [(860, (D - 3, -13.5, 2.6), (D - 3, -3, 1.1)), (1200, (D - 3, -12, 2.4), (D - 3, -3, 1.1))], lens=32)
+    cut(860, A3)
+    cel = dict(f=900, center=(D - 1.5, -4.8, 0.6), animals=[bun], end=stop, cam=A3)
+
+elif KIND == "fire":
+    tree_root, branch = big_tree((D + 0.6, 6.6, 0), branch_side=-1)
+    kit = make_animal("kitten", scale=1.0, name="kit")
+    kit.root.location = (branch.x, branch.y, branch.z + 0.05)
+    kit.root.rotation_euler.z = FACE_CAM
+    set_mood(kit, 0, False)
+    sad_pose(kit, 0, 985)
+    cry(kit, 480, 840)
+    auto_blink(kit.eyes, 0, N, 6)
+    sfx(520, "meow_sad")
+    sfx(610, "meow_sad")
+    fire_pos = Vector((D - 3.8, 6.4, 0))
+    for k in range(8):
+        a = k / 8 * 2 * math.pi
+        sphere("stone", 0.22, (fire_pos.x + math.cos(a) * 0.75, fire_pos.y + math.sin(a) * 0.75, 0.12), mat("stone", (0.5, 0.5, 0.52), rough=0.8), scale=(1, 1, 0.7))
+    for k in range(3):
+        cyl("log", 0.1, 1.1, (fire_pos.x, fire_pos.y, 0.15), mat("trunk", (0.45, 0.27, 0.12)), rot=(math.radians(90), 0, math.radians(k * 60)), verts=8)
+    flames((fire_pos.x, fire_pos.y, 0.1), 0, 690, n=5, size=0.9)
+    smoke((fire_pos.x, fire_pos.y, 0.6), 690, 790, n=6)
+    sfx(0, "crackle", dur=690 / FPS)
+    noz = v.parts["nozzle"]
+    nz_world = Vector((stop[0] + 0.25, 0.75, 2.0))
+    yaw = math.atan2(fire_pos.y - nz_world.y, fire_pos.x - nz_world.x)
+    keys(noz, "rotation_euler", [(600, (0, 0, 0)), (620, (0, 0, yaw))])
+    keys(noz, "rotation_euler", [(740, (0, 0, yaw)), (760, (0, 0, 0))])
+    tip = nz_world + Vector((math.cos(yaw) * 0.5, math.sin(yaw) * 0.5, 0.75))
+    water_spray(tuple(tip), (fire_pos.x, fire_pos.y, 0.5), 622, 726, n=16, arc=2.0)
+    sfx(622, "water", dur=104 / FPS)
+    sfx(688, "fizz")
+    F1 = camera("F1", [(600, (D - 2.5, -13.5, 3.4), (D - 1.5, 3.0, 1.6)), (730, (D - 2, -12.5, 3.6), (D - 1.0, 3.0, 2.0))], lens=30)
+    cut(600, F1)
+    # ladder up toward the kitten
+    piv = v.parts["ladder_pivot"]; ext = v.parts["ladder_ext"]
+    P = Vector((stop[0] - 2.2, 0, 2.2 + 0.15))
+    K = Vector((branch.x, branch.y, branch.z + 0.15))
+    d = K - P
+    yaw_l = math.atan2(d.y, d.x)
+    pitch = math.atan2(d.z, math.hypot(d.x, d.y))
+    ext_len = max(0.0, d.length - 3.4 - 0.25)
+    keys(piv, "rotation_euler", [(732, (0, 0, 0)), (770, (0, 0, yaw_l)), (800, (0, -pitch, yaw_l))])
+    keys(ext, "location", [(800, (0, 0, 0.12)), (832, (ext_len, 0, 0.12))])
+    sfx(732, "ladder", dur=100 / FPS)
+    F2 = camera("F2", [(730, (D + 6.5, -12.5, 4.4), (D + 0.3, 3.0, 3.0)), (870, (D + 5.5, -11.5, 4.6), (D + 0.3, 3.0, 3.4))], lens=32)
+    cut(730, F2)
+
+    def on_ladder(t):
+        p = P.lerp(K, t)
+        return p + Vector((0, 0, 0.25))
+    frames = list(range(842, 871, 2))
+    a0 = Vector(kit.root.location)
+    bake(kit.root, "location", frames, [tuple(a0.lerp(on_ladder(0.93), ease((f - 842) / 28)) + Vector((0, 0, 0.4 * math.sin(math.pi * (f - 842) / 28)))) for f in frames])
+    sfx(842, "meow")
+    frames = list(range(872, 951, 2))
+    bake(kit.root, "location", frames, [tuple(on_ladder(0.93 - 0.8 * ease((f - 872) / 78))) for f in frames])
+    sfx(872, "slide", dur=78 / FPS)
+    a1 = on_ladder(0.13); b1 = Vector((D - 1.6, -1.6, 0))
+    frames = list(range(952, 985, 2))
+    bake(kit.root, "location", frames, [tuple(a1.lerp(b1, ease((f - 952) / 32)) + Vector((0, 0, 1.3 * math.sin(math.pi * (f - 952) / 32)))) for f in frames])
+    sfx(952, "boing")
+    F3 = camera("F3", [(870, (D + 2.5, -10.5, 3.4), (D - 0.2, 2.5, 2.8)), (990, (D + 1.5, -10, 2.4), (D - 1.0, 0, 1.3))], lens=36)
+    cut(870, F3)
+    happy_pose(kit, 985)
+    set_mood(kit, 986, True)
+    sfx(988, "meow_happy")
+    hearts_burst((D - 1.6, -1.8, 1.5), 990, n=6, face_rot=FACE_CAM)
+    keys(ext, "location", [(1100, (ext_len, 0, 0.12)), (1130, (0, 0, 0.12))])
+    keys(piv, "rotation_euler", [(1130, (0, -pitch, yaw_l)), (1160, (0, 0, yaw_l)), (1190, (0, 0, 0))])
+    sfx(1100, "ladder", dur=90 / FPS)
+    F4 = camera("F4", [(990, (D - 2.0, -12.5, 2.9), (D - 0.5, 0.5, 1.6)), (1200, (D - 2.0, -11.5, 2.7), (D - 0.5, 0.5, 1.5))], lens=32)
+    cut(990, F4)
+    cel = dict(f=1004, center=(D - 1.6, -2.2, 0.6), animals=[kit], end=stop, cam=F4)
+
+elif KIND == "tow":
+    car = make_bubblecar()
+    car.root.location = (D + 1, -1.9, 0)
+    auto_blink(car.eyes, 0, N, 8)
+    sm = smoke((D + 2.0, -1.9, 1.1), 0, 975, n=6, color=(0.45, 0.45, 0.48), rise=2.0)
+    sfx(500, "sputter")
+    repair_shop((D + 40, 11.0, 0), rot=math.radians(-90))
+    T1 = camera("T1", [(600, (D + 2.5, -11.5, 2.5), (D + 3.2, -1.9, 1.2)), (740, (D + 2.5, -10.5, 2.4), (D + 3.2, -1.9, 1.2))], lens=35)
+    cut(600, T1)
+    crane = v.parts["crane"]; hk = v.parts["hook_root"]; cable = v.parts["cable"]; hook = v.parts["hook"]
+    keys(crane, "rotation_euler", [(605, (0, math.radians(35), 0)), (640, (0, math.radians(15), 0))])
+    keys(hk, "rotation_euler", [(605, (0, math.radians(-35), 0)), (640, (0, math.radians(-15), 0))])
+    sfx(605, "crane", dur=80 / FPS)
+
+    def cable_len(f, L):
+        key(cable, "location", f, (0, 0, -L / 2))
+        key(cable, "scale", f, (1, 1, L))
+        key(hook, "location", f, (0, 0, -L))
+    cable_len(650, 1.0)
+    cable_len(682, 1.45)
+    sfx(686, "clank")
+    cable_len(692, 1.45)
+    cable_len(728, 1.1)
+    keys(car.root, "location", [(692, (D + 1, -1.9, 0)), (728, (D + 1, -1.9, 0.4))])
+    keys(car.root, "rotation_euler", [(692, (0, 0, 0)), (728, (0, math.radians(-12), 0))])
+    sfx(694, "crane", dur=34 / FPS)
+    shop_stop = (D + 44, -1.9)
+    drive(v, [(742, stop, 0), (900, shop_stop, 0)])
+    off = Vector((D + 1, -1.9, 0.4)) - Vector(stop + (0,))
+    frames = list(range(742, 901, 2))
+    vals = []
+    for f in frames:
+        p, r = world_pos(v.root, f)
+        o = off.copy(); o.rotate(Euler(r))
+        vals.append(tuple(p + o))
+    bake(car.root, "location", frames, vals)
+    T2 = follow_cam("T2", v.root, 740, 900, offset=(-4.5, -12, 3.5), look_offset=(-2.0, 0, 1.0), lens=32)
+    cut(740, T2)
+    cpos = Vector(vals[-1])
+    keys(car.root, "location", [(904, tuple(cpos)), (930, (cpos.x, cpos.y, 0))])
+    keys(car.root, "rotation_euler", [(904, (0, math.radians(-12), 0)), (930, (0, 0, 0))])
+    cable_len(904, 1.1)
+    cable_len(930, 1.45)
+    cable_len(950, 1.0)
+    keys(crane, "rotation_euler", [(950, (0, math.radians(15), 0)), (975, (0, math.radians(35), 0))])
+    keys(hk, "rotation_euler", [(950, (0, math.radians(-15), 0)), (975, (0, math.radians(-35), 0))])
+    sfx(930, "clank")
+    w = wrench("wrench", (cpos.x, cpos.y - 0.3, 2.6))
+    w.rotation_euler.z = math.radians(-90)
+    key(w, "scale", 0, (0.001,) * 3)
+    pop_in(w, 940, 8, s=1.0)
+    bake(w, "rotation_euler", [948, 990], [(0, 0, math.radians(-90)), (0, math.radians(720), math.radians(-90))])
+    pop_out(w, 992, 6)
+    sfx(940, "magic")
+    sfx(950, "ratchet", dur=40 / FPS)
+    stars_burst((cpos.x, cpos.y - 0.3, 1.5), 975, n=9, face_rot=FACE_CAM, radius=1.8)
+    sfx(976, "sparkle")
+    swap_mouth(car.parts["happy"], car.parts["sad"], 985)
+    jump(car.root, 992, n=2, h=0.5, period=14)
+    sfx(992, "boing")
+    sfx(1000, "beep_happy")
+    roll_wheels(car, 742, N)
+    T3 = camera("T3", [(900, (D + 41.5, -13.5, 3.0), (D + 41.5, -2, 1.3)), (1200, (D + 41.5, -12, 2.8), (D + 41.5, -2, 1.3))], lens=32)
+    cut(900, T3)
+    cel = dict(f=1004, center=(cpos.x, -3.5, 0.6), animals=[], end=shop_stop, cam=T3, extra=[car.root])
+
+# ---------------------------------------------------------------- celebration
+cf = cel["f"]
+c = Vector(cel["center"])
+sfx(cf, "yay")
+confetti(tuple(c + Vector((0, 0, 0.5))), cf + 4, n=55)
+sfx(cf + 4, "confetti")
+stars_burst(tuple(c + Vector((0, 0, 2.0))), cf + 10, n=8, face_rot=FACE_CAM, radius=2.4)
+balloons(tuple(c + Vector((0, -0.5, 0.3))), cf + 40, n=7)
+sfx(cf + 40, "balloon")
+wiggle_happy(v, cf + 6, n=4)
+for a in cel["animals"]:
+    jump(a.root, cf + 8, n=4, h=0.7)
+for o in cel.get("extra", []):
+    jump(o, cf + 20, n=3, h=0.5)
+for k in range(4):
+    sfx(cf + 8 + k * 14, "boing", vol=0.5)
+for i, m in enumerate(v.lights):
+    flash(m, cf, cf + 120, period=8, on=10, phase=i)
+
+# ---------------------------------------------------------------- outro
+ex, ey = cel["end"]
+drive(v, [(1212, (ex, ey), 0), (1320, (ex + 30, 0), 0)])
+sfx(1206, "honk")
+sfx(1250, "whoosh")
+roll_wheels(v, 216, N)
+auto_blink(v.eyes, 216, N, 2)
+cc = cel["cam"]
+cl, _ = world_pos(cc, 1200)
+tl = evalv(bpy.data.objects[cc.name + "_tgt"], "location", 1200)
+G = camera("G", [(1200, tuple(cl), tuple(tl)), (1320, tuple(cl + Vector((4, 2, 9))), tuple(tl + Vector((12, 6, 10))))], lens=32)
+cut(1200, G)
+spin_t = None
+render("ep_" + KIND)
