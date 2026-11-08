@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy
 from mathutils import Vector
 from lib import *
+from vehicles import *
+import people as pp
 
 N = 1080
 PER = 216
@@ -116,6 +118,8 @@ for i, mk in enumerate(makers):
         keys(e, "scale", [(0, (1, 1, 1)), (f0 + 128, (1, 1, 1)), (f0 + 131, (1, 1, 0.08)), (f0 + 136, (1, 1, 1))])
     auto_blink(v.eyes, f0 + 140, f0 + PER, seed=i + 60)
     wiggle_happy(v, f0 + 146, n=3, h=0.35)
+    pp.wave(v.driver, f0 + 140, f0 + 196, side="r", seated=True)
+    pp.auto_blink(v.driver, f0 + 130, f0 + PER, i + 70)
     sfx(f0 + 150, sounds[i], dur=1.3, vol=0.6)
     for k, m in enumerate(v.lights):
         flash(m, f0 + 132, f0 + 200, period=10, on=9, phase=k)

@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy
 from mathutils import Vector
 from lib import *
+from vehicles import *
+import people as pp
 
 N = 480
 FACE = math.radians(-90)
@@ -44,6 +46,26 @@ car.root.rotation_euler.z = FACE
 car.parts["sad"].scale = (0.001,) * 3
 car.parts["happy"].scale = (1, 1, 1)
 
+kids = []
+for k, (x, nm, kw) in enumerate([(1.0, "ela", dict(hair_style="pigtails", hair="black", dress=True, shirt=(1.0, 0.8, 0.15), skin="tan")),
+                                  (8.8, "can", dict(hair_style="spiky", hair="brown", shirt=(0.2, 0.65, 0.95), iris="hazel")),
+                                  (13.2, "zey", dict(hair_style="bun", hair="red", dress=True, shirt=(0.55, 0.35, 0.9), iris="green")),
+                                  (21.2, "nil", dict(hair_style="pigtails", hair="blond", dress=True, shirt=(0.95, 0.45, 0.55), iris="blue", bow=(0.3, 0.6, 1.0))),
+                                  (23.2, "mech", dict(H=1.35, hat="cap", shirt=(0.15, 0.35, 0.6), pants=(0.15, 0.35, 0.6), skin="brown", hair="black"))]):
+    H = kw.pop("H", 1.1)
+    P = pp.make_person(nm, H=H, **kw)
+    P.root.location = (x, -5.0, 0)
+    P.root.rotation_euler.z = math.radians(-90)
+    pp.auto_blink(P, 0, N, 60 + k)
+    kids.append(P)
+for i, v in enumerate(vs):
+    pp.wave(v.driver, 20 + i * 15, 200 + i * 15, side="r", seated=True)
+    pp.wave(v.driver, 380, 470, side="r", seated=True)
+    pp.auto_blink(v.driver, 0, N, 70 + i)
+for k, P in enumerate(kids):
+    for f0 in (30, 190, 330):
+        pp.cheer(P, f0 + k * 6, n=2)
+    pp.wave(P, 400, 478, side="r")
 for i, v in enumerate(vs):
     for k, m in enumerate(v.lights):
         flash(m, 0, N, period=10, on=9, phase=k + i)

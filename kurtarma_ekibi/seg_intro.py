@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy
 from mathutils import Vector
 from lib import *
+from vehicles import *
+import people as pp
 
 N = 480
 s = reset(N)
@@ -55,6 +57,8 @@ for i, v in enumerate(vs):
         flash(m, f + 4, N, period=10, on=9, phase=k)
     sfx(f + 6, sounds[i], dur=1.4, vol=0.7)
     sfx(f + 26, "boing", vol=0.4)
+    pp.wave(v.driver, f + 8, f + 60, side="l", seated=True)
+    pp.auto_blink(v.driver, 0, N, i + 40)
     auto_blink(v.eyes, f + 20, N, seed=i + 30)
 # move camera in sync with the vehicle reveals
 ks = []
@@ -66,5 +70,13 @@ cam3 = camera("C3b", ks, lens=30)
 cut(270, cam3)
 for v in vs:
     wiggle_happy(v, 445, n=2, h=0.3)
+for k, (x, nm, kw) in enumerate([(-2.6, "k1", dict(hair_style="pigtails", hair="black", dress=True, shirt=(1.0, 0.8, 0.15), skin="tan")),
+                                  (24.4, "k2", dict(hair_style="spiky", hair="brown", shirt=(0.2, 0.65, 0.95), iris="hazel"))]):
+    P = pp.make_person(nm, H=1.1, **kw)
+    P.root.location = (x, 5.2, 0)
+    P.root.rotation_euler.z = math.radians(-90)
+    pp.auto_blink(P, 0, N, 50 + k)
+    pp.wave(P, 280 + k * 20, 420, side="r" if k == 0 else "l")
+    pp.cheer(P, 445, n=2)
 sfx(445, "yay", vol=0.8)
 render("intro")

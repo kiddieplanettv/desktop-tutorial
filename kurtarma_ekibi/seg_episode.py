@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy
 from mathutils import Vector, Euler
 from lib import *
+from vehicles import *
+import people as pp
 
 KIND = sys.argv[sys.argv.index("--") + 1]
 IDX = dict(police=0, ambulance=1, fire=2, tow=3)[KIND]
@@ -32,6 +34,8 @@ open_door(st, IDX, 100, 30)
 for e in v.eyes:
     keys(e, "scale", [(0, (1, 1, 0.08)), (140, (1, 1, 0.08)), (148, (1, 1, 1))])
 sfx(142, "wake")
+pp.wave(v.driver, 144, 200, side="l", seated=True)
+pp.auto_blink(v.driver, 0, N, 11)
 blink(v.eyes, [178])
 
 stop = {"fire": (D + 1.8, 0.0), "tow": (D + 5.3, -1.9)}.get(KIND, (D - 7.0, 0.0))
@@ -109,7 +113,17 @@ if KIND == "police":
     jump(mom.root, 910, n=2, h=0.6)
     P3 = camera("P3", [(860, (D + 26.5, -17, 3.2), (D + 29, -5, 1.3)), (1200, (D + 27.5, -14.5, 2.8), (D + 29, -4.5, 1.2))], lens=32)
     cut(860, P3)
-    cel = dict(f=960, center=(D + 29.5, -6.0, 0.6), animals=[pup, mom], end=(D + 27, 0), cam=P3)
+    ela = pp.make_person("ela", H=1.1, hair_style="pigtails", hair="black", dress=True, shirt=(1.0, 0.8, 0.15), skin="tan")
+    ela.root.location = (D + 32.6, -8.3, 0)
+    ela.root.rotation_euler.z = math.radians(-115)
+    pp.mood(ela, 0, "sad")
+    pp.sad_pose(ela, 0, 880)
+    pp.auto_blink(ela, 0, N, 12)
+    pp.mood(ela, 884, "oh")
+    pp.mood(ela, 900, "happy")
+    pp.cheer(ela, 902, n=2)
+    sfx(904, "giggle")
+    cel = dict(f=960, center=(D + 29.5, -6.0, 0.6), animals=[pup, mom], people=[ela], end=(D + 27, 0), cam=P3)
 
 elif KIND == "ambulance":
     bun = make_animal("bunny", name="bun")
@@ -154,7 +168,17 @@ elif KIND == "ambulance":
     sfx(870, "love")
     A3 = camera("A3", [(860, (D - 3, -13.5, 2.6), (D - 3, -3, 1.1)), (1200, (D - 3, -12, 2.4), (D - 3, -3, 1.1))], lens=32)
     cut(860, A3)
-    cel = dict(f=900, center=(D - 1.5, -4.8, 0.6), animals=[bun], end=stop, cam=A3)
+    can = pp.make_person("can", H=1.15, hair_style="spiky", hair="brown", shirt=(0.2, 0.65, 0.95), pants=(0.25, 0.25, 0.35), iris="hazel")
+    can.root.location = (D + 1.6, -6.4, 0)
+    can.root.rotation_euler.z = math.radians(-125)
+    pp.mood(can, 0, "oh")
+    pp.point(can, 480, 600, up=-35, side="l")
+    pp.look(can, 480, yaw=40, pitch=10)
+    pp.look(can, 760, yaw=0)
+    pp.auto_blink(can, 0, N, 13)
+    pp.mood(can, 762, "happy")
+    pp.cheer(can, 790, n=3)
+    cel = dict(f=900, center=(D - 1.5, -4.8, 0.6), animals=[bun], people=[can], end=stop, cam=A3)
 
 elif KIND == "fire":
     tree_root, branch = big_tree((D + 0.6, 6.6, 0), branch_side=-1)
@@ -226,7 +250,17 @@ elif KIND == "fire":
     sfx(1100, "ladder", dur=90 / FPS)
     F4 = camera("F4", [(990, (D - 2.0, -12.5, 2.9), (D - 0.5, 0.5, 1.6)), (1200, (D - 2.0, -11.5, 2.7), (D - 0.5, 0.5, 1.5))], lens=32)
     cut(990, F4)
-    cel = dict(f=1004, center=(D - 1.6, -2.2, 0.6), animals=[kit], end=stop, cam=F4)
+    zey = pp.make_person("zey", H=1.1, hair_style="bun", hair="red", dress=True, shirt=(0.55, 0.35, 0.9), skin="light", iris="green")
+    zey.root.location = (D - 4.0, 4.4, 0)
+    zey.root.rotation_euler.z = math.radians(-60)
+    pp.mood(zey, 0, "oh")
+    pp.point(zey, 470, 840, up=50, side="l")
+    pp.look(zey, 470, yaw=40, pitch=-25)
+    pp.look(zey, 845, yaw=0, pitch=0)
+    pp.auto_blink(zey, 0, N, 14)
+    pp.mood(zey, 988, "happy")
+    pp.cheer(zey, 992, n=2)
+    cel = dict(f=1004, center=(D - 1.6, -2.2, 0.6), animals=[kit], people=[zey], end=stop, cam=F4)
 
 elif KIND == "tow":
     car = make_bubblecar()
@@ -285,14 +319,23 @@ elif KIND == "tow":
     sfx(950, "ratchet", dur=40 / FPS)
     stars_burst((cpos.x, cpos.y - 0.3, 1.5), 975, n=9, face_rot=FACE_CAM, radius=1.8)
     sfx(976, "sparkle")
-    swap_mouth(car.parts["happy"], car.parts["sad"], 985)
     jump(car.root, 992, n=2, h=0.5, period=14)
     sfx(992, "boing")
     sfx(1000, "beep_happy")
     roll_wheels(car, 742, N)
     T3 = camera("T3", [(900, (D + 41.5, -13.5, 3.0), (D + 41.5, -2, 1.3)), (1200, (D + 41.5, -12, 2.8), (D + 41.5, -2, 1.3))], lens=32)
     cut(900, T3)
-    cel = dict(f=1004, center=(cpos.x, -3.5, 0.6), animals=[], end=shop_stop, cam=T3, extra=[car.root])
+    mech = pp.make_person("mech", H=1.35, hair_style="short", hair="black", hat="cap", shirt=(0.15, 0.35, 0.6), pants=(0.15, 0.35, 0.6), skin="brown")
+    mech.root.location = (D + 37.0, 5.6, 0)
+    mech.root.rotation_euler.z = math.radians(-90)
+    pp.auto_blink(mech, 0, N, 15)
+    pp.wave(mech, 902, 950, side="r")
+    pp.mood(mech, 960, "oh")
+    pp.mood(mech, 985, "happy")
+    pp.mood(car.driver, 984, "happy")
+    pp.wave(car.driver, 990, 1060, side="l", seated=True)
+    pp.auto_blink(car.driver, 0, N, 16)
+    cel = dict(f=1004, center=(cpos.x, -3.5, 0.6), animals=[], people=[mech], end=shop_stop, cam=T3, extra=[car.root])
 
 # ---------------------------------------------------------------- celebration
 cf = cel["f"]
@@ -304,6 +347,9 @@ stars_burst(tuple(c + Vector((0, 0, 2.0))), cf + 10, n=8, face_rot=FACE_CAM, rad
 balloons(tuple(c + Vector((0, -0.5, 0.3))), cf + 40, n=7)
 sfx(cf + 40, "balloon")
 wiggle_happy(v, cf + 6, n=4)
+for k, P in enumerate(cel.get("people", [])):
+    pp.cheer(P, cf + 10 + k * 4, n=4)
+pp.wave(v.driver, cf + 12, cf + 90, side="l", seated=True)
 for a in cel["animals"]:
     jump(a.root, cf + 8, n=4, h=0.7)
 for o in cel.get("extra", []):
@@ -317,6 +363,7 @@ for i, m in enumerate(v.lights):
 ex, ey = cel["end"]
 drive(v, [(1212, (ex, ey), 0), (1320, (ex + 30, 0), 0)])
 sfx(1206, "honk")
+pp.wave(v.driver, 1204, 1262, side="l", seated=True)
 sfx(1250, "whoosh")
 roll_wheels(v, 216, N)
 auto_blink(v.eyes, 216, N, 2)

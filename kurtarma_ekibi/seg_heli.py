@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy
 from mathutils import Vector
 from lib import *
+from vehicles import *
+import people as pp
 
 N = 1320
 D = 70.0
@@ -48,6 +50,8 @@ open_door(st, 4, 100, 30)
 for e in v.eyes:
     keys(e, "scale", [(0, (1, 1, 0.08)), (140, (1, 1, 0.08)), (148, (1, 1, 1))])
 sfx(142, "wake")
+pp.wave(v.driver, 144, 200, side="l", seated=True)
+pp.auto_blink(v.driver, 0, N, 11)
 blink(v.eyes, [178])
 auto_blink(v.eyes, 216, N, 23)
 for m in v.lights:
@@ -160,6 +164,17 @@ cut(770, H2)
 H3 = camera("H3", [(900, (D + 31, -7.0, 4.5), (D + 35, -22, 3.2)), (1200, (D + 31.5, -9.0, 3.6), (D + 35, -22, 2.6))], lens=32)
 cut(900, H3)
 
+nil = pp.make_person("nil", H=1.1, hair_style="pigtails", hair="blond", dress=True, shirt=(0.95, 0.45, 0.55), skin="light", iris="blue", bow=(0.3, 0.6, 1.0))
+nil.root.location = tuple(farm_spot + Vector((1.8, 1.0, 0)))
+nil.root.rotation_euler.z = math.radians(150)
+pp.mood(nil, 0, "sad")
+pp.sad_pose(nil, 0, 940)
+pp.auto_blink(nil, 0, N, 17)
+pp.mood(nil, 944, "oh")
+pp.mood(nil, 990, "happy")
+pp.cheer(nil, 992, n=2)
+sfx(996, "giggle")
+
 # ---------------------------------------------------------------- celebration + outro
 cf = 1004
 c = farm_spot + Vector((-0.8, 0.8, 0.6))
@@ -170,6 +185,8 @@ stars_burst(tuple(c + Vector((0, 0, 2.2))), cf + 10, n=8, face_rot=FACE, radius=
 balloons(tuple(c + Vector((0, 0.5, 0.3))), cf + 40, n=7)
 sfx(cf + 40, "balloon")
 jump(mama.root, cf + 8, n=4, h=0.6)
+pp.cheer(nil, cf + 30, n=3)
+pp.wave(v.driver, cf + 10, cf + 90, side="l", seated=True)
 jl = lamb.root
 for i in range(4):
     f = cf + 8 + i * 14

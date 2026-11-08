@@ -16,7 +16,7 @@ FONT_SYM = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # scene / render setup
 # ----------------------------------------------------------------------------
 
-def reset(frames, res=(960, 540), samples=8):
+def reset(frames, res=(960, 540), samples=10):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     s = bpy.context.scene
     s.render.engine = "BLENDER_EEVEE"
@@ -34,6 +34,13 @@ def reset(frames, res=(960, 540), samples=8):
     e.use_soft_shadows = True
     e.shadow_cascade_size = "2048"
     e.shadow_cube_size = "512"
+    e.use_ssr = True
+    e.use_ssr_refraction = True
+    e.ssr_quality = 0.5
+    e.use_motion_blur = True
+    e.motion_blur_shutter = 0.4
+    e.use_shadow_high_bitdepth = True
+    e.gtao_factor = 1.2
     s.view_settings.view_transform = "Standard"
     s.view_settings.look = "None"
     s.view_settings.exposure = 0.0
@@ -394,6 +401,7 @@ def camera(name, keys_, lens=35):
     c = bpy.data.objects.new(name, cd)
     _link(c)
     t = empty(name + "_tgt")
+    _dof(cd, t)
     for f, cl, tl in keys_:
         key(c, "location", f, cl)
         key(t, "location", f, tl)
@@ -402,6 +410,16 @@ def camera(name, keys_, lens=35):
     con.track_axis = "TRACK_NEGATIVE_Z"
     con.up_axis = "UP_Y"
     return c
+
+
+DOF_FSTOP = 3.2
+
+
+def _dof(cd, target):
+    cd.dof.use_dof = True
+    cd.dof.focus_object = target
+    cd.dof.aperture_fstop = DOF_FSTOP
+    cd.sensor_width = 36
 
 
 def cut(frame, cam):
@@ -423,6 +441,7 @@ def follow_cam(name, target, f0, f1, offset, look_offset=(0, 0, 1), step=2, lens
     c = bpy.data.objects.new(name, cd)
     _link(c)
     t = empty(name + "_tgt")
+    _dof(cd, t)
     frames = [k[0] for k in ks]
     bake(c, "location", frames, [tuple(k[1]) for k in ks])
     bake(t, "location", frames, [tuple(k[2]) for k in ks])
@@ -733,6 +752,9 @@ def wiggle_happy(v, f0, n=3, h=0.35):
 # animals (face +X)
 # ----------------------------------------------------------------------------
 
+ANIMAL_SCALE = 0.62
+
+
 class Animal:
     def __init__(self):
         self.root = None
@@ -824,7 +846,7 @@ def make_animal(kind, scale=1.0, name=None):
         a.happy = mouth(head, (0.33, 0, -0.14), R=0.07, r=0.018, happy=True, name=name + "hm")
         a.sad = mouth(head, (0.33, 0, -0.18), R=0.06, r=0.018, happy=False, name=name + "sm")
         a.head = head
-    a.root.scale = (scale,) * 3
+    a.root.scale = (scale * ANIMAL_SCALE,) * 3
     # tears (blue drops under eyes)
     tm = mat("tear", (0.3, 0.6, 1.0), rough=0.05, emit=0.3)
     for e in a.eyes:
@@ -1043,14 +1065,48 @@ STATION_Y = 9.0  # front facade y
 
 
 def ground(size=500):
-    g = box("ground", (size, size, 0.2), (40, 0, -0.1), mat("grass", C["grass"], rough=0.9, spec=0.2), bevel=0)
+    g = box("ground", (size, size, 0.2), (40, 0, -0.1), noise_mat("grass2", (0.3, 0.7, 0.18), (0.45, 0.82, 0.25), 0.6, rough=0.85), bevel=0)
     return g
 
 
+def noise_mat(name, c1, c2, scale=1.0, rough=0.6, bump=0.15):
+    """Two-colour noise material with a little bump: grass, asphalt, sidewalks."""
+    if name in _MATS:
+        return _MATS[name]
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    p = nt.nodes["Principled BSDF"]
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = scale
+    nz.inputs["Detail"].default_value = 6
+    rp = nt.nodes.new("ShaderNodeValToRGB")
+    rp.color_ramp.elements[0].color = (*c1, 1)
+    rp.color_ramp.elements[1].color = (*c2, 1)
+    rp.color_ramp.elements[0].position = 0.35
+    rp.color_ramp.elements[1].position = 0.65
+    bm = nt.nodes.new("ShaderNodeBump")
+    bm.inputs["Strength"].default_value = bump
+    nz2 = nt.nodes.new("ShaderNodeTexNoise")
+    nz2.inputs["Scale"].default_value = scale * 40
+    nt.links.new(tc.outputs["Object"], nz.inputs["Vector"])
+    nt.links.new(tc.outputs["Object"], nz2.inputs["Vector"])
+    nt.links.new(nz.outputs["Fac"], rp.inputs["Fac"])
+    nt.links.new(rp.outputs["Color"], p.inputs["Base Color"])
+    nt.links.new(nz2.outputs["Fac"], bm.inputs["Height"])
+    nt.links.new(bm.outputs["Normal"], p.inputs["Normal"])
+    p.inputs["Roughness"].default_value = rough
+    p.inputs["Specular IOR Level"].default_value = 0.25
+    m.diffuse_color = (*c1, 1)
+    _MATS[name] = m
+    return m
+
+
 def road(x0=-60, x1=200):
-    asphalt = mat("asphalt", C["road"], rough=0.8, spec=0.2)
+    asphalt = noise_mat("asphalt2", (0.36, 0.35, 0.46), (0.44, 0.42, 0.54), 3.0, rough=0.7, bump=0.08)
     line = mat("roadline", (1, 1, 1), rough=0.5)
-    side = mat("sidewalk", (0.82, 0.8, 0.76), rough=0.8, spec=0.2)
+    side = noise_mat("sidewalk2", (0.95, 0.82, 0.72), (1.0, 0.9, 0.8), 2.0, rough=0.7, bump=0.05)
     L = x1 - x0
     box("road", (L, 7.0, 0.06), ((x0 + x1) / 2, 0, 0.03), asphalt, bevel=0)
     for s in (-1, 1):
@@ -1079,6 +1135,51 @@ def house(loc, rot=0.0, wall=(1, 0.85, 0.6), roof=(0.85, 0.2, 0.15), w=4.0, d=4.
         box("hwinf", (0.06, 0.95, 0.95), (w / 2 + 0.01, sx, h * 0.6), frame, root, bevel=0.03)
         box("hwin", (0.08, 0.8, 0.8), (w / 2 + 0.02, sx, h * 0.6), win, root, bevel=0.02)
     box("hdoor", (0.08, 0.8, 1.4), (w / 2 + 0.02, 0, 0.7), mat("door", (0.55, 0.3, 0.15), rough=0.6), root, bevel=0.04)
+    return root
+
+
+def shop(loc, rot=0.0, wall=(1.0, 0.85, 0.75), stripe=((0.2, 0.75, 0.7), (1, 1, 1)), seed=0, h=5.5, w=6.0, d=5.0):
+    """Two-storey pastel shop with a striped awning; front (+X local) faces the road."""
+    r = random.Random(seed)
+    root = empty("shop", loc, rot=(0, 0, rot))
+    wm = mat(f"shopwall{wall}", wall, rough=0.65, spec=0.25)
+    trim = mat("shoptrim", (1, 0.97, 0.92), rough=0.5)
+    box("sw", (d, w, h), (0, 0, h / 2), wm, root, bevel=0.15)
+    box("sroof", (d + 0.3, w + 0.3, 0.35), (0, 0, h + 0.1), trim, root, bevel=0.12)
+    box("sbase", (d + 0.1, w + 0.1, 0.4), (0, 0, 0.2), trim, root, bevel=0.08)
+    glassm = mat("shopglass", (0.65, 0.85, 1.0), rough=0.05, spec=0.9, emit=0.1)
+    box("swin", (0.1, w * 0.55, 1.6), (d / 2 + 0.02, -w * 0.12, 1.4), glassm, root, bevel=0.03)
+    box("swinf", (0.08, w * 0.58, 1.75), (d / 2 + 0.0, -w * 0.12, 1.4), trim, root, bevel=0.04)
+    box("sdoor", (0.1, 1.0, 2.0), (d / 2 + 0.03, w * 0.32, 1.0), mat("sdoor", (0.55, 0.32, 0.2), rough=0.5), root, bevel=0.04)
+    for k, yy in enumerate((-w * 0.25, w * 0.25)):
+        box("uwinf", (0.08, 1.2, 1.3), (d / 2 + 0.01, yy, h * 0.7), trim, root, bevel=0.05)
+        box("uwin", (0.1, 1.0, 1.1), (d / 2 + 0.03, yy, h * 0.7), glassm, root, bevel=0.03)
+        box("sill", (0.25, 1.3, 0.1), (d / 2 + 0.12, yy, h * 0.7 - 0.62), trim, root, bevel=0.03)
+        flower = mat(f"flower{k % 5}", [C["pink"], C["yellow"], C["red"]][k % 3], rough=0.5)
+        for j in range(3):
+            sphere("fl", 0.12, (d / 2 + 0.2, yy - 0.35 + j * 0.35, h * 0.7 - 0.5), flower, root, segs=10, rings=6)
+    # striped awning
+    n = 8
+    sw = w * 0.9 / n
+    s0, s1 = mat(f"awn{stripe[0]}", stripe[0], rough=0.6), mat(f"awn{stripe[1]}", stripe[1], rough=0.6)
+    for k in range(n):
+        box("awn", (1.4, sw, 0.06), (d / 2 + 0.6, -w * 0.45 + sw * (k + 0.5), 2.75), s0 if k % 2 == 0 else s1, root,
+            bevel=0.02, rot=(0, math.radians(22), 0))
+        sphere("awnscallop", sw * 0.5, (d / 2 + 1.25, -w * 0.45 + sw * (k + 0.5), 2.45), s0 if k % 2 == 0 else s1, root,
+               scale=(0.2, 1, 0.6), segs=12, rings=6)
+    signc = r.choice([C["pink"], C["teal"], C["orange"], C["purple"], C["blue"]])
+    box("sign", (0.15, w * 0.6, 0.7), (d / 2 + 0.08, 0, h * 0.47 + 0.15), mat(f"sign{signc}", signc, rough=0.4), root, bevel=0.1)
+    return root
+
+
+def lamp_post(loc):
+    root = empty("lamp", loc)
+    pm = mat("lamppole", (1.0, 0.92, 0.75), rough=0.4)
+    cyl("lbase", 0.22, 0.4, (0, 0, 0.2), mat("lampbase", (0.85, 0.45, 0.6), rough=0.4), root, verts=16)
+    cyl("lpole", 0.07, 3.6, (0, 0, 2.0), pm, root, verts=12)
+    torus("lring", 0.12, 0.04, (0, 0, 3.75), mat("lampbase", (0.85, 0.45, 0.6)), root, rot=(math.radians(90), 0, 0))
+    sphere("lglobe", 0.35, (0, 0, 4.1), mat("lampglobe", (1.0, 0.97, 0.85), rough=0.2, emit=0.8), root, segs=16, rings=10)
+    cone("lcap", 0.3, 0.25, (0, 0, 4.5), mat("lampbase", (0.85, 0.45, 0.6)), root, verts=16)
     return root
 
 
@@ -1214,9 +1315,18 @@ def town(skip_zones=(), seed=1):
                 continue
             yy = y + side * r.uniform(0, 3)
             if free(x, yy):
-                house((x + r.uniform(-1, 1), yy, 0), rot=math.radians(-90 if side == 1 else 90),
-                      wall=walls[i % 5], roof=roofs[i % 4], seed=i, h=r.uniform(2.6, 3.6))
+                if side == 1 and i % 3 != 2:
+                    shop((x + r.uniform(-0.5, 0.5), yy - 1.5, 0), rot=math.radians(-90), wall=walls[i % 5],
+                         stripe=[((0.2, 0.75, 0.7), (1, 1, 1)), ((1, 0.45, 0.55), (1, 1, 1)), ((1, 0.75, 0.2), (1, 1, 1))][i % 3], seed=i,
+                         h=r.uniform(5.0, 6.5))
+                else:
+                    house((x + r.uniform(-1, 1), yy, 0), rot=math.radians(-90 if side == 1 else 90),
+                          wall=walls[i % 5], roof=roofs[i % 4], seed=i, h=r.uniform(2.6, 3.6))
             i += 1
+    for x in range(-36, 190, 13):
+        for y in (5.3, -5.3):
+            if free(x, y) and not (-3 < x < 25 and y > 0):
+                lamp_post((x, y, 0))
     for k in range(70):
         x = r.uniform(-40, 190)
         y = r.uniform(7, 32) if k % 2 else -r.uniform(22, 40)
