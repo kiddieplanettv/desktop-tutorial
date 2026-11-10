@@ -48,7 +48,8 @@ def _img_mat(name, path):
     nt.links.new(tr.outputs[0], mix.inputs[1])
     nt.links.new(em.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], out.inputs[0])
-    m.blend_method = "HASHED"
+    m.blend_method = "CLIP"
+    m.alpha_threshold = 0.4
     m.shadow_method = "NONE"
     return m, sil, tex.image
 

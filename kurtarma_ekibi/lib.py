@@ -16,7 +16,7 @@ FONT_SYM = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # scene / render setup
 # ----------------------------------------------------------------------------
 
-def reset(frames, res=(960, 540), samples=10):
+def reset(frames, res=(960, 540), samples=6):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     s = bpy.context.scene
     s.render.engine = "BLENDER_EEVEE"
@@ -26,18 +26,18 @@ def reset(frames, res=(960, 540), samples=10):
     s.frame_start, s.frame_end = 0, frames - 1
     e = s.eevee
     e.taa_render_samples = samples
-    e.use_gtao = True
+    e.use_gtao = False
     e.gtao_distance = 1.5
     e.use_bloom = True
     e.bloom_intensity = 0.04
     e.bloom_threshold = 1.2
-    e.use_soft_shadows = True
-    e.shadow_cascade_size = "2048"
-    e.shadow_cube_size = "512"
-    e.use_ssr = True
+    e.use_soft_shadows = False
+    e.shadow_cascade_size = "1024"
+    e.shadow_cube_size = "256"
+    e.use_ssr = False
     e.use_ssr_refraction = True
     e.ssr_quality = 0.5
-    e.use_motion_blur = True
+    e.use_motion_blur = False
     e.motion_blur_shutter = 0.4
     e.use_shadow_high_bitdepth = True
     e.gtao_factor = 1.2
