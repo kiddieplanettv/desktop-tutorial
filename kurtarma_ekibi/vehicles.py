@@ -147,12 +147,20 @@ def mirrors(v, x, half_w, z, m):
         box("mirror", (0.08, 0.16, 0.13), (x, s * (half_w + 0.22), z), m, v.body, bevel=0.04)
 
 
+PERSON_DRIVERS = False
+
+
 def driver(v, hip, **kw):
-    P = make_person(v.kind + "_driver", H=1.05, seated=True, **kw)
-    P.root.parent = v.body
-    P.root.location = (hip[0], hip[1], hip[2] - 0.3 * 1.05 + 0.18)
-    v.driver = P
-    return P
+    """Seat slot for a character card (or a procedural person when PERSON_DRIVERS)."""
+    slot = empty(v.kind + "_seat", (hip[0] + 0.05, hip[1], hip[2] + 0.05), v.body)
+    v.seat = slot
+    v.driver = None
+    if PERSON_DRIVERS:
+        P = make_person(v.kind + "_driver", H=1.05, seated=True, **kw)
+        P.root.parent = v.body
+        P.root.location = (hip[0], hip[1], hip[2] - 0.3 * 1.05 + 0.18)
+        v.driver = P
+    return v.driver
 
 
 def light_bar(v, x, z, w=1.3, colors=("red", "blue")):
@@ -233,6 +241,15 @@ def make_firetruck():
             box("rail", (L, 0.09, 0.12), (L / 2, s * w / 2, 0), silver, parent, bevel=0.03)
         for i in range(int(L / 0.4)):
             cyl("rung", 0.035, w, (0.2 + i * 0.4, 0, 0), silver, parent, rot=(math.radians(90), 0, 0), verts=8)
+    bucket = empty("ladder_bucket", (3.45, 0, 0.0), lad2)
+    v.parts["bucket"] = bucket
+    lvl = empty("bucket_level", (0, 0, 0), bucket)  # counter-rotated to stay upright
+    v.parts["bucket_level"] = lvl
+    box("bk_floor", (0.9, 1.0, 0.08), (0.3, 0, 0.0), silver, lvl, bevel=0.03)
+    for yy in (-0.5, 0.5):
+        box("bk_rail", (0.9, 0.06, 0.42), (0.3, yy, 0.23), red, lvl, bevel=0.03)
+    box("bk_front", (0.06, 1.0, 0.42), (0.75, 0, 0.23), red, lvl, bevel=0.03)
+    box("bk_back", (0.06, 1.0, 0.42), (-0.15, 0, 0.23), red, lvl, bevel=0.03)
     v.parts.update(ladder_pivot=piv, ladder=lad, ladder_ext=lad2)
     noz = empty("nozzle_piv", (0.25, 0.75, 2.0), v.body)
     cyl("noz_base", 0.18, 0.25, (0, 0, 0), silver, noz, verts=16)
@@ -301,10 +318,8 @@ def make_helicopter():
     sphere("h_light", 0.12, (-0.75, 0, 2.55), lm, v.body)
     v.lights.append(lm)
     v.parts.update(rotor=rot, tail_rotor=trot)
-    P = make_person("heli_driver", H=1.05, seated=True, hat="pilot", shirt=(0.3, 0.45, 0.3), pants=(0.3, 0.45, 0.3), hair="blond", skin="light", iris="blue")
-    P.root.parent = v.body
-    P.root.location = (0.15, 0, 1.15 - 0.3 * 1.05 + 0.18)
-    v.driver = P
+    v.seat = empty("heli_seat", (0.25, 0, 1.15), v.body)
+    v.driver = None
     return v
 
 
@@ -317,10 +332,7 @@ def make_bubblecar(color=(0.6, 0.3, 0.9)):
     front_face(v, 1.3, 0.5, 0.88, 0.72, 0.5, 1.65, light_r=0.22, grille_w=0.6, grille_h=0.3)
     rear_face(v, -1.3, 0.55, 0.85, 0.5, 1.65)
     _wheels2(v, (0.8, -0.8), 0.78, r=0.34, w=0.28)
-    P = driver(v, hip, shirt=(0.95, 0.85, 0.2), pants=(0.25, 0.3, 0.5), hair="brown", hair_style="short", skin="tan", iris="hazel")
-    p_mood(P, 0, "sad")
-    v.parts["happy"] = P.happy
-    v.parts["sad"] = P.sad
+    driver(v, hip)
     return v
 
 
@@ -344,4 +356,27 @@ def park_vehicles(st, which=None):
 # make lib's own references (e.g. in game/intros) use the new designs too
 lib.make_police, lib.make_ambulance, lib.make_firetruck = make_police, make_ambulance, make_firetruck
 lib.make_towtruck, lib.make_helicopter, lib.make_bubblecar = make_towtruck, make_helicopter, make_bubblecar
+
+
+def make_recycler():
+    """Green & white recycling truck (Murat's)."""
+    v = Vehicle("recycler")
+    v.root = empty("recycler"); v.body = empty("recycler_body", parent=v.root)
+    white = paint("r_white", (0.96, 0.97, 0.97))
+    green = paint("r_green", (0.12, 0.62, 0.28))
+    box("r_base", (5.0, 2.1, 0.8), (-0.2, 0, 0.9), green, v.body, bevel=0.3, segs=5)
+    box("r_hood", (0.6, 1.8, 0.25), (2.0, 0, 1.4), white, v.body, bevel=0.1)
+    hip = cab(v, 0.75, 1.75, 1.3, 2.45, 2.0, white, white, front_tilt=8, back_glass=False)
+    box("r_box", (3.0, 2.15, 2.0), (-1.05, 0, 2.15), green, v.body, bevel=0.35, segs=5)
+    box("r_rear", (0.4, 2.0, 1.8), (-2.6, 0, 1.95), mat("r_dark", (0.2, 0.3, 0.25), rough=0.5), v.body, bevel=0.15)
+    for sd, rz in ((-1, 0), (1, 180)):
+        text("r_sym", "♻", 1.2, (-1.05, sd * 1.09, 2.2), white, v.body, rot=(math.radians(90), 0, math.radians(rz)), font=FONT_SYM, extrude=0.02, bevel=0)
+        box("r_stripe", (5.05, 0.04, 0.16), (-0.2, sd * 1.06, 1.05), white, v.body, bevel=0.02)
+    front_face(v, 2.25, 0.65, 1.05, 0.85, 0.55, 2.1, light_r=0.26, grille_w=1.0, grille_h=0.48)
+    rear_face(v, -2.75, 0.75, 1.0, 0.55, 2.1)
+    mirrors(v, 1.7, 1.05, 1.8, white)
+    _wheels2(v, (1.35, -0.7, -1.8), 0.98, r=0.46)
+    light_bar(v, 1.25, 2.68, w=1.4, colors=("orange", "orange"))
+    driver(v, hip)
+    return v
 lib.park_vehicles = park_vehicles

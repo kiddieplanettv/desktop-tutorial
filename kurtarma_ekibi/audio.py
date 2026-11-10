@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(HERE, "build")
 SR = 44100
 FPS = 24
-ORDER = ["intro", "ep_police", "ep_ambulance", "ep_fire", "ep_tow", "ep_heli", "game", "finale"]
+ORDER = ["k_intro", "k_ep1", "k_ep2", "k_ep3", "k_ep4", "k_game", "k_finale"]
 rng = np.random.default_rng(7)
 
 # ----------------------------------------------------------------------------- primitives
@@ -397,6 +397,131 @@ def sfx_baa_sad(**_):
 
 def sfx_baa(**_):
     return baa(1.1, 0.6)
+
+
+def sfx_birds(dur=10.0, **_):
+    n = int(dur * SR)
+    out = np.zeros(n)
+    t = 0.3
+    while t < dur - 1:
+        f0 = rng.uniform(2600, 4200)
+        for k in range(rng.integers(2, 5)):
+            d = rng.uniform(0.05, 0.12)
+            f = glide(f0 * rng.uniform(0.95, 1.1), f0 * rng.uniform(1.1, 1.4), d)
+            x = osc(f, d) * env(int(d * SR), 0.005, 0.03) * 0.05
+            s = int((t + k * 0.13) * SR)
+            out[s:s + len(x)] += x[: n - s]
+        t += rng.uniform(1.0, 3.0)
+    return out
+
+
+def sfx_kick(vol=1.0, **_):
+    d = 0.12
+    return (osc(glide(180, 70, d), d) * expdec(int(d * SR), 0.03) + bandnoise(d, 300, 3000) * expdec(int(d * SR), 0.01) * 0.3) * 0.6 * vol
+
+
+def pizz(m, d=0.18, vol=0.25):
+    f = note_hz(m)
+    x = lowpass(osc(f, d, "saw"), 1800) * expdec(int(d * SR), 0.05)
+    return x * vol
+
+
+def sfx_sneak(dur=8.0, **_):
+    notes = [57, None, 60, None, 64, 63, 62, None, 57, None, 60, None, 59, 58, 57, None]
+    step = 0.2
+    n = int(dur * SR)
+    out = np.zeros(n)
+    i = 0
+    t = 0.0
+    while t < dur - 0.3:
+        m = notes[i % len(notes)]
+        if m is not None:
+            x = pizz(m)
+            s = int(t * SR)
+            out[s:s + len(x)] += x[: n - s]
+        t += step
+        i += 1
+    return out
+
+
+def sfx_sneak_short(**_):
+    return sfx_sneak(1.6)
+
+
+def sfx_tiptoe(dur=4.0, **_):
+    return sfx_sneak(dur) * 0.7
+
+
+def sfx_oops(**_):
+    d = 0.45
+    return (osc(glide(700, 380, d, 0.8), d, "tri") * env(int(d * SR), 0.01, 0.15)) * 0.35
+
+
+def sfx_splash(**_):
+    d = 0.7
+    return bandnoise(d, 400, 7000) * expdec(int(d * SR), 0.15) * 0.45
+
+
+def sfx_slip(**_):
+    d = 0.5
+    return osc(glide(1500, 300, d, 0.6), d, "sine") * env(int(d * SR), 0.01, 0.1) * 0.25
+
+
+def sfx_climb(dur=4.0, **_):
+    n = int(dur * SR)
+    out = np.zeros(n)
+    for i in range(0, n, int(0.22 * SR)):
+        c = bandnoise(0.06, 800, 4000) * expdec(int(0.06 * SR), 0.02) * 0.18
+        out[i:i + len(c)] += c[: n - i]
+    return out
+
+
+def ooh(f0, f1, d):
+    t = t_(d)
+    f = glide(f0, f1, d) * (1 + 0.03 * np.sin(2 * np.pi * 8 * t))
+    x = lowpass(osc(f, d, "saw"), 1600) + 0.5 * lowpass(osc(f * 2, d, "tri"), 2500)
+    return x * env(len(t), 0.02, 0.06) * 0.22
+
+
+def sfx_monkey(**_):
+    return cat(ooh(420, 620, 0.18), silence(0.04), ooh(520, 820, 0.16), silence(0.04), ooh(620, 980, 0.2))
+
+
+def sfx_monkey_scared(**_):
+    return cat(*[cat(ooh(900, 1200, 0.1), silence(0.03)) for _ in range(5)])
+
+
+def sfx_monkey_happy(**_):
+    return cat(ooh(500, 900, 0.15), silence(0.03), ooh(600, 1100, 0.15), silence(0.03), ooh(700, 1300, 0.25))
+
+
+def sfx_ding(pitch=1.0, **_):
+    return bell(1320 * pitch, 0.8) * 0.35
+
+
+def sfx_truck(dur=5.0, **_):
+    n = int(dur * SR)
+    x = lowpass(osc(55 * (1 + 0.05 * np.sin(np.linspace(0, dur * 9, n))), dur, "saw"), 400) * 0.18
+    return x * env(n, 0.4, 0.6)
+
+
+def sfx_beep_reverse(dur=1.5, **_):
+    unit = cat(beep(1050, 0.25, "sine", 0.35), silence(0.25))
+    n = int(dur * SR)
+    return np.tile(unit, int(np.ceil(n / len(unit))))[:n]
+
+
+def sfx_truck_beep(dur=2.0, **_):
+    return sfx_beep_reverse(dur) * 0.9 + sfx_truck(dur) * 0.6
+
+
+def sfx_brake(**_):
+    d = 0.6
+    return bandnoise(d, 2500, 4500) * env(int(d * SR), 0.02, 0.2) * 0.2
+
+
+def sfx_baa_mama(**_):
+    return baa(0.75, 0.9)
 
 
 SFX = {k[4:]: v for k, v in globals().items() if k.startswith("sfx_")}
