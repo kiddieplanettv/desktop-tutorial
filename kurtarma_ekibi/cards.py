@@ -541,3 +541,85 @@ def flower(loc, seed=0, n=5):
             sphere("petal", 0.07, (x + math.cos(ang) * 0.07, y + math.sin(ang) * 0.07, 0.5), c, root, scale=(1, 1, 0.4), segs=8, rings=5)
         sphere("pcenter", 0.045, (x, y, 0.52), mat("pcenter", (1, 0.8, 0.1), rough=0.5), root, segs=8, rings=5)
     return root
+
+
+# ---------------------------------------------------------------------------- multi-pose characters (character sheets)
+CHARS2 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chars2")
+# which sheet cell is which view, per character (screen direction the character faces)
+VIEWS = {
+    "default": dict(front="v0", q_r="v1", side_l="v2", back_l="v3", back="v4", back_r="v5", side_r="v6", q_l="v7"),
+    "sami": dict(front="v0", q_r="v1", side_r="v2", back_l="v3", back="v4", back_r="v5", side_l="v6", q_l="v7"),
+    "burak": dict(front="v0", q_r="v1", side_r="v2", back_l="v3", back="v4", back_r="v5", side_l="v6", q_l="v7"),
+}
+HEIGHTS2 = {"ada": 1.15, "emir": 1.15, "elif": 1.15, "deniz": 1.15, "sami": 1.4, "burak": 1.75, "kemal": 1.75,
+            "murat": 1.75, "pamuk": 0.95, "inek": 1.3, "cimcime": 1.0}
+
+
+class Sprite(Card):
+    """A card that can switch between the views/expressions of a character sheet."""
+
+    def __init__(self, who, loc=(0, 0, 0), height=None, tag=None, parent=None, shadow=True):
+        self.who = who
+        h = height or HEIGHTS2[who]
+        folder = os.path.join(CHARS2, who)
+        names = sorted(os.path.splitext(n)[0] for n in os.listdir(folder) if n.endswith(".png"))
+        global CHARS
+        old = CHARS
+        CHARS = folder
+        try:
+            super().__init__(tag or who, "v0", h, loc, shadow=shadow, parent=parent)
+        finally:
+            CHARS = old
+        ref_px = next(n.image for n in self.plane.data.materials[0].node_tree.nodes if n.type == "TEX_IMAGE").size[1]
+        self.planes = {"v0": self.plane}
+        for n in names:
+            if n == "v0":
+                continue
+            m, sil, image = _img_mat(f"{self.name}_{n}", os.path.join(folder, n + ".png"))
+            w0, h0 = image.size
+            ph = h * h0 / ref_px
+            pw = ph * w0 / h0
+            bm = bmesh.new()
+            uv = bm.loops.layers.uv.new()
+            vs = [bm.verts.new(c) for c in ((-pw / 2, 0, 0), (pw / 2, 0, 0), (pw / 2, 0, ph), (-pw / 2, 0, ph))]
+            f = bm.faces.new(vs)
+            for lp, (u, v) in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
+                lp[uv].uv = (u, v)
+            me = bpy.data.meshes.new(f"{self.name}_{n}")
+            bm.to_mesh(me)
+            bm.free()
+            me.materials.append(m)
+            ob = bpy.data.objects.new(f"{self.name}_{n}", me)
+            _link(ob, self.sq)
+            ob.visible_shadow = False
+            self.planes[n] = ob
+        self.map = dict(VIEWS.get(who, VIEWS["default"]))
+        for e in ("happy", "angry", "surprised", "sad"):
+            self.map[e] = e
+        self.pose_keys = [(0, "front")]
+
+    def pose(self, f, name):
+        """Show a view ('front', 'side_r', 'q_l', 'back' ...) or expression ('happy', 'sad' ...) from frame f."""
+        self.pose_keys.append((f, name))
+        return self
+
+    def turn(self, f, *names, step=3):
+        for i, n in enumerate(names):
+            self.pose(f + i * step, n)
+        return self
+
+    def finish(self, N):
+        super().finish(N)
+        keys_ = sorted(self.pose_keys, key=lambda p: p[0])
+        for img, ob in self.planes.items():
+            ob.hide_render = True
+            ob.keyframe_insert("hide_render", frame=0)
+        for f, name in keys_:
+            img = self.map.get(name, name)
+            for k, ob in self.planes.items():
+                ob.hide_render = (k != img)
+                ob.keyframe_insert("hide_render", frame=f)
+
+
+def sprite(who, loc=(0, 0, 0), **kw):
+    return Sprite(who, loc, **kw)

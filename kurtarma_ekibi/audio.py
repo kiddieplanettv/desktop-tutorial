@@ -524,6 +524,13 @@ def sfx_baa_mama(**_):
     return baa(0.75, 0.9)
 
 
+def sfx_whistle(**_):
+    d = 0.5
+    t = t_(d)
+    f = 2900 * (1 + 0.04 * np.sign(np.sin(2 * np.pi * 28 * t)))
+    return cat(osc(f[: int(0.18 * SR)], 0.18) * env(int(0.18 * SR), 0.005, 0.02), silence(0.06), osc(f, d) * env(len(t), 0.005, 0.05)) * 0.22
+
+
 SFX = {k[4:]: v for k, v in globals().items() if k.startswith("sfx_")}
 
 # ----------------------------------------------------------------------------- music
