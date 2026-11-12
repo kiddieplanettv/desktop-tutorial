@@ -619,9 +619,11 @@ def music(total_sec, bpm=112):
 # ----------------------------------------------------------------------------- mix
 
 def main():
+    order = sys.argv[1].split(",") if len(sys.argv) > 1 else ORDER
+    out_name = sys.argv[2] if len(sys.argv) > 2 else "soundtrack.wav"
     segs = []
     off = 0
-    for name in ORDER:
+    for name in order:
         with open(os.path.join(BUILD, name + "_events.json")) as fh:
             d = json.load(fh)
         segs.append((name, off, d))
@@ -662,7 +664,7 @@ def main():
     mix[-fo:] *= np.linspace(1, 0, fo)
     stereo = np.stack([mix, mix], axis=1)
     pcm = (stereo * 32767).astype(np.int16)
-    path = os.path.join(BUILD, "soundtrack.wav")
+    path = os.path.join(BUILD, out_name)
     with wave.open(path, "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)
