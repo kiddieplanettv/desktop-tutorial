@@ -12,6 +12,24 @@ CH3 = os.path.join(HERE, "chars3d")
 X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
 
 
+GROUND = ("curb", "ground", "parklawn", "parkpath", "road", "lawn", "path", "sidewalk", "farm", "field", "yard", "grass")
+
+
+def ground_z(x, y):
+    """Height of the walkable surface (lawn, path, pavement, road) under a point."""
+    sc = bpy.context.scene
+    dg = bpy.context.evaluated_depsgraph_get()
+    z = 1.2
+    for _ in range(12):
+        hit, loc, _n, _i, ob, _m = sc.ray_cast(dg, Vector((x, y, z)), Vector((0, 0, -1)))
+        if not hit:
+            return 0.0
+        if ob.name.lower().startswith(GROUND):
+            return loc.z
+        z = loc.z - 0.002
+    return 0.0
+
+
 def smooth(t):
     t = max(0.0, min(1.0, t))
     return t * t * (3 - 2 * t)
@@ -26,6 +44,68 @@ def env(f, f0, f1, ramp=8):
 
 
 ALL = []
+
+# ---------------------------------------------------------------- motion capture library
+import json
+_MC = None
+
+
+def mocap():
+    global _MC
+    if _MC is None:
+        raw = json.load(open(os.path.join(CH3, "mocap.json")))
+        _MC = {}
+        for name, c in raw.items():
+            fr = [dict(dirs={k: Vector(v) for k, v in f["dirs"].items()},
+                       rots={k: Quaternion(v) for k, v in f["rots"].items()},
+                       lat=f["lat"], fwd=f["fwd"], air=f["air"]) for f in c["frames"]]
+            _MC[name] = dict(frames=fr, loop=c.get("loop", False), stride=c.get("stride", 0.0))
+    return _MC
+
+
+def pmix(a, b, w, bones=None):
+    """Blend two poses (w = share of b); 'bones' limits the blend to some bones (e.g. the upper body)."""
+    if w <= 0:
+        return a
+    out = dict(dirs=dict(a["dirs"]), rots=dict(a["rots"]), lat=a["lat"], fwd=a["fwd"], air=a["air"])
+    for k, v in b["dirs"].items():
+        if bones is None or k in bones:
+            d = a["dirs"][k].lerp(v, w)
+            out["dirs"][k] = d.normalized() if d.length > 1e-6 else v
+    for k, q in b["rots"].items():
+        if bones is None or k in bones:
+            out["rots"][k] = a["rots"][k].slerp(q, w)
+    if bones is None:
+        for k in ("lat", "fwd", "air"):
+            out[k] = a[k] * (1 - w) + b[k] * w
+    return out
+
+
+def psample(name, t, mirror=False):
+    """Pose of clip 'name' at (fractional) frame t. Gait loops wrap; other loops play back and forth."""
+    c = mocap()[name]
+    fr = c["frames"]; n = len(fr)
+    if c["stride"]:
+        t = t % n
+        i = int(t); j = (i + 1) % n
+    else:
+        if c["loop"]:
+            t = t % (2 * (n - 1))
+            if t > n - 1:
+                t = 2 * (n - 1) - t
+        t = max(0.0, min(n - 1.0, t))
+        i = int(t); j = min(n - 1, i + 1)
+    p = pmix(fr[i], fr[j], t - i)
+    if mirror:
+        sw = lambda k: k[:-1] + ("R" if k.endswith("L") else "L") if k[-2:] in (".L", ".R") else k
+        p = dict(dirs={sw(k): Vector((-v.x, v.y, v.z)) for k, v in p["dirs"].items()},
+                 rots={k: Quaternion((q.w, q.x, -q.y, -q.z)) for k, q in p["rots"].items()},
+                 lat=-p["lat"], fwd=p["fwd"], air=p["air"])
+    return p
+
+
+UPPER = {"spine", "head", "upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R"}
+ARM = {"L": {"upper_arm.L", "forearm.L"}, "R": {"upper_arm.R", "forearm.R"}}
 
 
 class Char3D:
@@ -53,6 +133,16 @@ class Char3D:
         self.head = [(0, heading)]
         rest = {b.name: b.matrix_local.to_3x3() for b in self.rig.data.bones}
         self.rest = rest
+        self.plays = []
+        self.gph = {}
+        self.look_cam = True
+        bs = self.rig.data.bones
+        self.order = [b.name for b in bs]            # parents come first
+        self.parent = {b.name: (b.parent.name if b.parent else None) for b in bs}
+        self.bhead = {b.name: b.head_local.copy() for b in bs}
+        self.blen = {b.name: b.length for b in bs}
+        self.L = bs["thigh.L"].length + bs["shin.L"].length
+        self.seed = len(ALL) * 37.0
         self.body.visible_shadow = True
         ALL.append(self)
 
@@ -70,6 +160,25 @@ class Char3D:
         self.head.append((f0 + min(turn, max(1, f1 - f0)), h))
         if gait:
             self.gaits.append((f0, f1, gait))
+        return self
+
+    def go(self, f0, x, y, gait="walk", rate=1.0, heading=None):
+        """Travel to (x, y) starting at f0 at the natural speed of the gait (real stride length for this
+        character's legs). Returns the arrival frame."""
+        from lib import FPS
+        p0, _ = self._at(f0)
+        d = (Vector((x, y, 0)) - Vector((p0.x, p0.y, 0))).length
+        c = mocap()[gait]
+        v = c["stride"] * self.L / len(c["frames"]) * rate       # metres per frame at full speed
+        f1 = f0 + max(8, int(round(d / v / (1 - 0.22))))
+        self.move(f0, f1, x, y, heading=heading, gait=gait)
+        return f1
+
+    def play(self, f0, name, f1=None, rate=1.0, bones=None, mirror=False, fade=6, gain=1.0):
+        """Play a motion-capture clip from f0 (blended in/out). bones: None = whole body, or a set of bones."""
+        n = len(mocap()[name]["frames"])
+        f1 = f1 if f1 is not None else f0 + int(n / rate)
+        self.plays.append((f0, f1, name, rate, bones, mirror, fade, gain))
         return self
 
     def face(self, f, heading, dur=12, step=True):
@@ -125,29 +234,107 @@ class Char3D:
         return self
 
     # ------------------------------------------------------------ bake
+    def solve(self, pose):
+        """Motion-capture pose -> local bone rotations for this rig + how far the lowest foot is below rest."""
+        rest = self.rest
+        A, Hd, out = {}, {}, {}
+        for bn in self.order:
+            p = self.parent[bn]
+            if p:
+                inh = A[p] @ rest[p].inverted() @ rest[bn]
+                Hd[bn] = Hd[p] + A[p] @ rest[p].inverted() @ (self.bhead[bn] - self.bhead[p])
+            else:
+                inh = rest[bn].copy()
+                Hd[bn] = self.bhead[bn].copy()
+            if bn in pose["rots"]:
+                D = pose["rots"][bn].to_matrix() @ rest[bn]
+            elif bn in pose["dirs"]:
+                d = pose["dirs"][bn].copy()
+                sg = 1 if bn.endswith(".L") else -1
+                if bn.startswith("upper_arm") and d.z < -0.2:      # chubby body: keep hanging arms off the tummy
+                    d.x = sg * max(d.x * sg, 0.30); d.normalize()
+                if bn.startswith("forearm") and d.z < -0.2:
+                    d.x = sg * max(d.x * sg, 0.12); d.normalize()
+                D = inh.col[1].rotation_difference(d).to_matrix() @ inh
+            else:
+                D = inh
+            out[bn] = (inh.inverted() @ D).to_quaternion()
+            A[bn] = D
+        low = 0.0
+        for sd in ("L", "R"):
+            fb = "foot." + sd
+            ank = Hd[fb].z - self.bhead[fb].z
+            toe = (Hd[fb] + A[fb].col[1] * self.blen[fb]).z - (self.bhead[fb] + rest[fb].col[1] * self.blen[fb]).z
+            low = min(low, ank, toe) if sd == "R" else min(ank, toe)
+        return out, low
+
     def bake(self, N):
+        from lib import FPS
         frames = list(range(0, N + 1))
         loc, rot = [], []
         bones = {b.name: [] for b in self.rig.data.bones}
         path = [self._at(f) for f in frames]
-        # distance travelled (plus a little for turning on the spot) drives the step phase
         dist = [0.0]
         for k in range(1, len(frames)):
             (pa, ha), (pb, hb) = path[k - 1], path[k]
             dh = abs((hb - ha + 180) % 360 - 180)
-            dist.append(dist[-1] + (pb - pa).length + math.radians(dh) * 0.10 * self.H)
-        speed = [0.0] + [dist[k] - dist[k - 1] for k in range(1, len(frames))]
-        sm = speed[:]
-        for k in range(len(frames)):           # smooth the speed a little (gait blends in/out)
-            w = speed[max(0, k - 3):k + 4]
-            sm[k] = sum(w) / len(w)
-        gait_fns = [gait(self, g0, g1, kind, dist, sm) for g0, g1, kind in self.gaits]
+            dist.append(dist[-1] + (pb - pa).length + math.radians(dh) * 0.25 * self.L)
+        MC = mocap()
+        zs = []
+        # cheat to camera: turn the head (and a little of the chest) towards the active camera, so the
+        # drawn face is seen from the front / three-quarter and never in a hard profile
+        from lib import evalv
+        marks = sorted(bpy.context.scene.timeline_markers, key=lambda m: m.frame)
+        look = []
+        for f in frames:
+            cam = None
+            for m in marks:
+                if m.frame <= f and m.camera:
+                    cam = m.camera
+            y = 0.0
+            if cam is not None and self.look_cam:
+                p, h = path[f]
+                d = Vector(evalv(cam, "location", f)) - p
+                hr = math.radians(h)
+                lx = d.x * math.cos(hr) + d.y * math.sin(hr)
+                ly = -d.x * math.sin(hr) + d.y * math.cos(hr)
+                a = math.degrees(math.atan2(lx, -ly))
+                y = max(-48.0, min(48.0, a * 0.65)) * max(0.0, min(1.0, (170 - abs(a)) / 30))
+            look.append(y)
+        look = [sum(look[max(0, k - 6):k + 7]) / len(look[max(0, k - 6):k + 7]) for k in range(len(look))]
         for f in frames:
             p, h = path[f]
-            ang = {}
-            lift = 0.0
-            shift = 0.0
-            for fn in gait_fns + self.acts:
+            ds = dist[f] - dist[f - 1] if f else 0.0
+            pose = psample("idle", f * 0.15 + self.seed)
+            pose = dict(pose, lat=0.0, fwd=0.0)
+            for g in self.gaits:
+                f0, f1, kind = g[:3]
+                clip = "walk" if kind == "turn" else kind
+                c = MC[clip]; n = len(c["frames"])
+                st = self.gph.setdefault(id(g), 0.0)
+                if f0 - 8 <= f <= f1 + 8:
+                    st += ds / (c["stride"] * self.L) * n          # feet stay locked to the ground distance
+                    self.gph[id(g)] = st
+                w = env(f, f0, f1, ramp=6)
+                if w <= 0:
+                    continue
+                vnat = c["stride"] * self.L / n
+                w *= min(1.0, ds / (0.3 * vnat)) if kind != "turn" else 0.5
+                pose = pmix(pose, psample(clip, st), smooth(w))
+            for f0, f1, name, rate, bns, mirror, fade, gain in self.plays:
+                w = env(f, f0, f1, ramp=fade)
+                if w <= 0:
+                    continue
+                q = psample(name, max(0.0, (f - f0) * rate), mirror)
+                q = dict(q, air=q["air"] * gain, lat=0.0, fwd=0.0)
+                if bns is not None and "hips" not in bns:      # upper-body clip rides on the current hips
+                    rel = pose["rots"]["hips"] @ q["rots"]["hips"].inverted()
+                    q["rots"] = {k: rel @ v for k, v in q["rots"].items()}
+                    q["dirs"] = {k: rel @ v for k, v in q["dirs"].items()}
+                pose = pmix(pose, q, smooth(w), bns)
+            quats, low = self.solve(pose)
+            ang, lift, shift = {}, 0.0, 0.0
+            for fn in self.acts:
                 r = fn(f)
                 lift += r.pop("_lift", 0.0)
                 shift += r.pop("_shift", 0.0)
@@ -155,15 +342,29 @@ class Char3D:
                     ang.setdefault(bn, []).append((axis, deg))
                 for bn, (axis, deg) in r.items():
                     ang.setdefault(bn, []).append((axis, deg))
+            ang.setdefault("head", []).append((Z, look[f] * 0.7))
+            ang.setdefault("spine", []).append((Z, look[f] * 0.3))
             hr = math.radians(h)
-            loc.append((p.x + shift * math.cos(hr), p.y + shift * math.sin(hr), p.z + lift))
-            rot.append((0, 0, math.radians(h)))
+            sx = shift + pose["lat"] * self.L
+            sy = pose["fwd"] * self.L
+            zs.append(-low + pose["air"] * self.L + lift)
+            loc.append([p.x + sx * math.cos(hr) - sy * math.sin(hr), p.y + sx * math.sin(hr) + sy * math.cos(hr), p.z])
+            rot.append((0, 0, hr))
             for bn in bones:
-                q = Quaternion()
+                q = quats[bn]
                 for axis, deg in ang.get(bn, []):
                     la = (self.rest[bn].inverted() @ axis).normalized()
                     q = q @ Quaternion(la, math.radians(deg))
                 bones[bn].append(tuple(q))
+        gz = [ground_z(l[0], l[1]) if self.rig.parent and not self.root.parent else 0.0 for l in loc]
+        gz = [sum(gz[max(0, k - 3):k + 4]) / len(gz[max(0, k - 3):k + 4]) for k in range(len(gz))]   # step up kerbs softly
+        for k in range(len(frames)):                # tiny smoothing of the height (no jitter on contact changes)
+            w = zs[max(0, k - 1):k + 2]
+            loc[k][2] += sum(w) / len(w) + gz[k]
+        for bn, vals in bones.items():              # keep quaternions on one side (no flips between frames)
+            for k in range(1, len(vals)):
+                if sum(x * y for x, y in zip(vals[k], vals[k - 1])) < 0:
+                    vals[k] = tuple(-x for x in vals[k])
         # expressions (material mix factors)
         mat = self.body.data.materials[0]
         if self.tag_copy:
@@ -180,7 +381,7 @@ class Char3D:
                 inp.default_value = prev
                 inp.keyframe_insert("default_value", frame=max(0, f - 1))
                 inp.default_value = v
-                inp.keyframe_insert("default_value", frame=f + ramp)
+                inp.keyframe_insert("default_value", frame=f)      # hard switch: two faces are never mixed
                 prev = v
         bake(self.root, "location", frames, loc)
         bake(self.root, "rotation_euler", frames, rot)
@@ -208,17 +409,14 @@ def bake_all(N):
 # ---------------------------------------------------------------- actions (rest pose faces -Y)
 
 def idle(phase=0.0, amp=1.0):
-    """Alive while standing: breathing, slow weight shift from foot to foot, small head movements."""
+    """Alive while standing: breathing, slow weight shift, small head movements (on top of the standing pose)."""
     def fn(f):
         br = math.sin(2 * math.pi * f / 72 + phase)
         ws = math.sin(2 * math.pi * f / 190 + phase * 1.7)
         hd = math.sin(2 * math.pi * f / 130 + phase * 0.6)
-        return {"spine": (X, 1.2 * br * amp), "hips": (Y, 2.0 * ws * amp),
-                "head": (Z, 5 * hd * amp),
-                "_extra": [("spine", Y, -1.6 * ws * amp), ("head", X, -1.0 * br * amp),
-                           ("upper_arm.L", Y, (-3 - 1.5 * br) * amp), ("upper_arm.R", Y, (3 + 1.5 * br) * amp),
-                           ("forearm.L", X, -10 * amp), ("forearm.R", X, -10 * amp)],
-                "_shift": 0.006 * ws * amp}
+        return {"spine": (X, 1.2 * br * amp), "hips": (Y, 1.5 * ws * amp), "head": (Z, 5 * hd * amp),
+                "_extra": [("spine", Y, -1.5 * ws * amp), ("head", X, -1.0 * br * amp),
+                           ("forearm.L", X, -8 * amp), ("forearm.R", X, -8 * amp)]}
     return fn
 
 
@@ -335,33 +533,42 @@ def wave(f0, f1, side="R"):
 
 
 def cheer(f0, f1, jumps=2, h=0.25):
-    """Happy jumps: crouch (anticipation) -> spring up with arms high -> soft landing."""
+    """Arms thrown up while cheering (the jump itself is motion capture: see cheer_on)."""
     def fn(f):
         e = env(f, f0, f1, ramp=6)
         if e <= 0:
             return {}
-        T = (f1 - f0) / max(1, jumps)
-        t = ((f - f0) % T) / T if f0 <= f <= f1 else 0.0
-        if t < 0.25:
-            crouch, air = math.sin(math.pi * t / 0.25 * 0.5), 0.0
-        elif t < 0.8:
-            crouch, air = 0.0, math.sin(math.pi * (t - 0.25) / 0.55)
-        else:
-            crouch, air = math.sin(math.pi * (t - 0.8) / 0.2), 0.0
-        arms = 0.75 + 0.25 * air
         sw = math.sin(2 * math.pi * (f - f0) / 16)
-        return {"upper_arm.L": (Y, -150 * arms * e), "upper_arm.R": (Y, 150 * arms * e),
-                "forearm.L": (Y, (-15 + 12 * sw) * e), "forearm.R": (Y, (15 - 12 * sw) * e),
-                "thigh.L": (X, (-30 * crouch - 12 * air) * e), "thigh.R": (X, (-30 * crouch - 12 * air) * e),
-                "shin.L": (X, (55 * crouch + 25 * air) * e), "shin.R": (X, (55 * crouch + 25 * air) * e),
-                "spine": (X, (10 * crouch - 4 * air) * e), "head": (X, -6 * air * e),
-                "_lift": (h * air - 0.05 * crouch) * e}
+        return {"upper_arm.L": (Y, -150 * e), "upper_arm.R": (Y, 150 * e),
+                "forearm.L": (Y, (-15 + 12 * sw) * e), "forearm.R": (Y, (15 - 12 * sw) * e)}
     return fn
 
 
-def sad(f0, f1):
+def cheer_on(ch, f0, jumps=2, gain=2.2, arms=True):
+    """Happy motion-captured jumps (crouch, spring, soft landing) with the arms up. Returns the end frame."""
+    n = len(mocap()["jump"]["frames"])
+    step = int(n * 0.72)
+    for k in range(jumps):
+        ch.play(f0 + k * step, "jump", rate=1.25, gain=gain, fade=5)
+    f1 = f0 + jumps * step
+    if arms:
+        ch.add(cheer(f0 + 4, f1 - 4))
+    return f1
+
+
+def wave_on(ch, f0, f1, side="R"):
+    """Motion-captured hello wave with one arm (the rest of the body keeps doing what it does)."""
+    n = len(mocap()["wave"]["frames"])
+    sd = side
+    ch.play(f0, "wave", f1=f1, rate=n / max(1, f1 - f0), bones=ARM[sd] | {"spine", "head"}, mirror=(side == "L"), fade=7)
+    sg = 1 if side == "R" else -1
+    ch.add(lambda f: {f"upper_arm.{sd}": (Y, sg * 75 * env(f, f0 + 6, f1 - 8, ramp=8))})
+    return f1
+
+
+def sad(f0, f1, k=1.0):
     def fn(f):
-        e = env(f, f0, f1, ramp=12)
+        e = env(f, f0, f1, ramp=12) * k
         if e <= 0:
             return {}
         return {"head": (X, 12 * e), "spine": (X, 6 * e),

@@ -374,7 +374,7 @@ def ball(name="ball", r=0.22):
     return root
 
 
-def ball_path(b, pts, r=0.22):
+def ball_path(b, pts, r=0.22, ground=None):
     """pts: list of (frame, (x,y), arc_height). Bouncing arcs between points; spins while flying."""
     frames, locs, rots = [], [], []
     ang = 0.0
@@ -383,11 +383,11 @@ def ball_path(b, pts, r=0.22):
             t = (f - f0) / max(1, f1 - f0)
             x = p0[0] + (p1[0] - p0[0]) * t
             y = p0[1] + (p1[1] - p0[1]) * t
-            z = r + h1 * 4 * t * (1 - t)
+            z = r + h1 * 4 * t * (1 - t) + (ground(x, y) if ground else 0)
             ang += 0.35 if h1 > 0 or (p1 != p0) else 0
             frames.append(f); locs.append((x, y, z)); rots.append((ang, ang * 0.3, 0))
     f, p, _ = pts[-1]
-    frames.append(f); locs.append((p[0], p[1], r)); rots.append((ang, ang * 0.3, 0))
+    frames.append(f); locs.append((p[0], p[1], r + (ground(p[0], p[1]) if ground else 0))); rots.append((ang, ang * 0.3, 0))
     bake(b, "location", frames, locs)
     bake(b, "rotation_euler", frames, rots)
 
