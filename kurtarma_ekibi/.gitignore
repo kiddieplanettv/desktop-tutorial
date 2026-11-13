@@ -4,3 +4,4 @@ __pycache__/
 chars3d/*.blend
 chars3d/*.blend1
 chars3d/*_tex.png
+chars3d/*_atlas*.png

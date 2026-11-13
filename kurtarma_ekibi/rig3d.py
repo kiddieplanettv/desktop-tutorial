@@ -50,118 +50,128 @@ bb = [Vector(v.co) for v in ob.data.vertices]
 mn = Vector((min(v.x for v in bb), min(v.y for v in bb), min(v.z for v in bb)))
 mx = Vector((max(v.x for v in bb), max(v.y for v in bb), max(v.z for v in bb)))
 
-# --- vertex colours: project the 4 sheet views, blended by the surface normal
-import numpy as np
+# --- smooth away the sculpted eye/nose/mouth relief on the face: the drawn face then sits on a clean
+# surface instead of sliding over bumps that do not line up with the drawing
+bm = bmesh.new(); bm.from_mesh(ob.data)
+Hn = mx.z - mn.z
+face_v = [v for v in bm.verts if v.co.z > mn.z + 0.55 * Hn and v.normal.y < -0.25]
+for it in range(40):
+    bmesh.ops.smooth_vert(bm, verts=face_v, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+bm.normal_update()
+bm.to_mesh(ob.data); bm.free()
+ob.data.update()
 
+# --- texture: every face takes its colours from exactly ONE sheet view (no blending -> no ghosting).
+# UVs point into a 4-tile atlas built by tex_prep.py; per-row silhouette matching keeps faces aligned.
+import numpy as np, json
+from mathutils.bvhtree import BVHTree
 
-def load(name):
-    img = bpy.data.images.load(os.path.join(VIEWS, name + ".png"))
-    w, h = img.size
-    a = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
-    return a
-
-
-IMG = {"F": load(vF), "B": load(vB), "Xp": load(vXp), "Xn": load(vXn)}
-
-
-def sample(a, u, v):
-    h, w = a.shape[:2]
-    x = np.clip(u * (w - 1), 0, w - 1)
-    y = np.clip(v * (h - 1), 0, h - 1)
-    x0 = np.floor(x).astype(int); y0 = np.floor(y).astype(int)
-    x1 = np.minimum(x0 + 1, w - 1); y1 = np.minimum(y0 + 1, h - 1)
-    fx = (x - x0)[:, None]; fy = (y - y0)[:, None]
-    c = (a[y0, x0] * (1 - fx) * (1 - fy) + a[y0, x1] * fx * (1 - fy) + a[y1, x0] * (1 - fx) * fy + a[y1, x1] * fx * fy)
-    return c
-
-
+meta = json.load(open(os.path.join(OUT, who + "_atlas.json")))
+TW, TH = meta["tile_w"], meta["tile_h"]
+AW = TW * len(meta["order"])
 me = ob.data
 n = len(me.vertices)
 co = np.zeros(n * 3, dtype=np.float32); me.vertices.foreach_get("co", co); co = co.reshape(n, 3)
-me.calc_normals() if hasattr(me, "calc_normals") else None
-nr = np.zeros(n * 3, dtype=np.float32); me.vertices.foreach_get("normal", nr); nr = nr.reshape(n, 3)
-def fit(a):
-    """Bounding box of the opaque pixels (u0,u1,v0,v1) in normalised image coords (v up)."""
-    al = a[..., 3] > 0.5
-    ys, xs = np.nonzero(al)
-    h, w = al.shape
-    return xs.min() / w, (xs.max() + 1) / w, ys.min() / h, (ys.max() + 1) / h
+Hm = mx.z - mn.z
+vz = (co[:, 2] - mn.z) / Hm
+HC = {"F": (co[:, 0] - mn.x) / (mx.x - mn.x), "B": (co[:, 0] - mn.x) / (mx.x - mn.x),
+      "Xp": (co[:, 1] - mn.y) / (mx.y - mn.y), "Xn": 1 - (co[:, 1] - mn.y) / (mx.y - mn.y)}
+DIRS = {"F": Vector((0, -1, 0)), "B": Vector((0, 1, 0)), "Xp": Vector((1, 0, 0)), "Xn": Vector((-1, 0, 0))}
+NB = 256
+zb = np.clip((vz * NB).astype(int), 0, NB - 1)
 
 
-def proj(a, u, v):
-    u0, u1, v0, v1 = fit(a)
-    return sample(a, u0 + u * (u1 - u0), v0 + v * (v1 - v0))
+def mesh_ext(h):
+    L = np.full(NB, np.nan); R = np.full(NB, np.nan)
+    order = np.argsort(zb)
+    for b in range(NB):
+        sel = h[zb == b]
+        if len(sel):
+            L[b], R[b] = sel.min(), sel.max()
+    idx = np.arange(NB); ok = ~np.isnan(L)
+    L = np.interp(idx, idx[ok], L[ok]); R = np.interp(idx, idx[ok], R[ok])
+    from statistics import median
+    def med(a, k=5):
+        return np.array([median(a[max(0, i - k):i + k + 1]) for i in range(len(a))])
+    return med(L), med(R)
 
 
-vz = (co[:, 2] - mn.z) / (mx.z - mn.z)
-ux = (co[:, 0] - mn.x) / (mx.x - mn.x)
-uy = (co[:, 1] - mn.y) / (mx.y - mn.y)
-FLIPX = "--flipx" in argv
-cols = {"F": proj(IMG["F"], ux, vz), "B": proj(IMG["B"], ux, vz),
-        "Xp": proj(IMG["Xp"], uy, vz), "Xn": proj(IMG["Xn"], 1 - uy, vz)}
-K = 6.0
-w = {"F": np.maximum(-nr[:, 1], 0) ** K * 1.6, "B": np.maximum(nr[:, 1], 0) ** K,
-     "Xp": np.maximum(nr[:, 0], 0) ** K, "Xn": np.maximum(-nr[:, 0], 0) ** K}
-# ignore transparent samples (outside the silhouette in that view)
-for k in w:
-    w[k] = w[k] * (cols[k][:, 3] > 0.5) + 1e-6
-tot = sum(w.values())
-rgb = sum(cols[k][:, :3] * (w[k] / tot)[:, None] for k in w)
-ca = me.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
-ca.data.foreach_set("color", np.hstack([rgb, np.ones((n, 1), np.float32)]).ravel())
+UVV = {}
+for k in meta["order"]:
+    t = meta["tiles"][k]
+    L, R = np.array(t["L"]), np.array(t["R"])
+    h = HC[k]
+    Lm, Rm = mesh_ext(h)
+    zf = np.clip(vz * NB - 0.5, 0, NB - 1)
+    lm = np.interp(zf, np.arange(NB), Lm); rm = np.interp(zf, np.arange(NB), Rm)
+    row = t["top"] + (1 - vz) * (t["bot"] - t["top"])
+    rl = np.interp(row, np.arange(TH), L); rr = np.interp(row, np.arange(TH), R)
+    frac = (h - lm) / np.maximum(1e-6, rm - lm)
+    px = rl + np.clip(frac, 0, 1) * (rr - rl)
+    UVV[k] = np.stack([(t["x0"] + px) / AW, 1 - row / TH], 1)
 
-# --- expression variants: re-project only the front of the head from each expression picture
-def head_box(a, top_frac=0.46):
-    al = a[..., 3] > 0.5
-    h, w = al.shape
-    ys, xs = np.nonzero(al)
-    ytop = ys.max()                      # Blender pixels: row 0 = bottom
-    ybody = ys.min()
-    hh = (ytop - ybody) * top_frac
-    sel = ys > ytop - hh
-    return xs[sel].min() / w, (xs[sel].max() + 1) / w, (ytop - hh) / h, (ytop + 1) / h
-
-
-neck = mn.z + (mx.z - mn.z) * 0.54
-hv = co[:, 2] > neck
-hx0, hx1 = co[hv, 0].min(), co[hv, 0].max()
-hz0, hz1 = neck, mx.z
-front_w = np.clip(-nr[:, 1] * 1.4, 0, 1) * np.clip((co[:, 2] - neck) / ((mx.z - mn.z) * 0.04), 0, 1)
-for ex in ("happy", "sad", "surprised", "angry"):
-    pth = os.path.join(VIEWS, ex + ".png")
-    if not os.path.exists(pth):
+bm = bmesh.new(); bm.from_mesh(me)
+bm.faces.ensure_lookup_table()
+bvh = BVHTree.FromBMesh(bm)
+eps = 0.004 * Hm
+choice = []
+for f in bm.faces:
+    c = f.calc_center_median(); nn = f.normal
+    best, bk = -9, "F"
+    head = c.z > mn.z + 0.52 * Hm
+    if head and nn.dot(DIRS["F"]) > 0.15 and bvh.ray_cast(c + DIRS["F"] * eps, DIRS["F"])[0] is None:
+        choice.append("F")      # the whole face hemisphere comes from the front drawing (one eye, one nose)
         continue
-    A = load(ex)
-    u0, u1, v0, v1 = head_box(A)
-    hu = (co[:, 0] - hx0) / (hx1 - hx0)
-    hzv = (co[:, 2] - hz0) / (hz1 - hz0)
-    c = sample(A, u0 + hu * (u1 - u0), v0 + hzv * (v1 - v0))
-    wv = front_w * (c[:, 3] > 0.5)
-    rgb_e = rgb * (1 - wv[:, None]) + c[:, :3] * wv[:, None]
-    ce = me.color_attributes.new("Col_" + ex, "FLOAT_COLOR", "POINT")
-    ce.data.foreach_set("color", np.hstack([rgb_e, np.ones((n, 1), np.float32)]).ravel())
+    for k, d in DIRS.items():
+        if head and k == "F":
+            continue
+        sc_ = nn.dot(d) * (1.25 if k == "F" else 1.0)
+        hit = bvh.ray_cast(c + d * eps, d)
+        if hit[0] is not None:
+            sc_ -= 2.0
+        if sc_ > best:
+            best, bk = sc_, k
+    choice.append(bk)
+uvl = bm.loops.layers.uv.new("UVMap")
+for f, k in zip(bm.faces, choice):
+    uv = UVV[k]
+    for l in f.loops:
+        l[uvl].uv = uv[l.vert.index]
+bm.to_mesh(me); bm.free()
+print("views", {k: choice.count(k) for k in DIRS})
 
 final = bpy.data.materials.new(who + "_mat")
 final.use_nodes = True
-p = final.node_tree.nodes["Principled BSDF"]
-t = final.node_tree.nodes.new("ShaderNodeVertexColor")
-t.layer_name = "Col"
-cur = t.outputs["Color"]
-for ex in ("happy", "sad", "surprised", "angry"):
-    if ("Col_" + ex) not in me.color_attributes:
-        continue
-    vc = final.node_tree.nodes.new("ShaderNodeVertexColor")
-    vc.layer_name = "Col_" + ex
-    mx_ = final.node_tree.nodes.new("ShaderNodeMix")
+nt = final.node_tree
+p = nt.nodes["Principled BSDF"]
+
+
+def tex(fn):
+    t = nt.nodes.new("ShaderNodeTexImage")
+    t.image = bpy.data.images.load(os.path.join(OUT, fn))
+    t.interpolation = "Cubic"
+    t.extension = "EXTEND"
+    return t
+
+
+cur = tex(who + "_atlas.png").outputs["Color"]
+for ex in meta["exprs"]:
+    t = tex(f"{who}_atlas_{ex}.png")
+    mx_ = nt.nodes.new("ShaderNodeMix")
     mx_.data_type = "RGBA"
     mx_.name = "EXPR_" + ex
     mx_.inputs["Factor"].default_value = 0.0
-    final.node_tree.links.new(cur, mx_.inputs[6])
-    final.node_tree.links.new(vc.outputs["Color"], mx_.inputs[7])
+    nt.links.new(cur, mx_.inputs[6])
+    nt.links.new(t.outputs["Color"], mx_.inputs[7])
     cur = mx_.outputs[2]
-final.node_tree.links.new(cur, p.inputs["Base Color"])
-p.inputs["Roughness"].default_value = 0.55
-p.inputs["Specular IOR Level"].default_value = 0.3
+hs = nt.nodes.new("ShaderNodeHueSaturation")
+hs.name = "VIVID"
+hs.inputs["Saturation"].default_value = 1.12
+hs.inputs["Value"].default_value = 1.03
+nt.links.new(cur, hs.inputs["Color"])
+nt.links.new(hs.outputs["Color"], p.inputs["Base Color"])
+p.inputs["Roughness"].default_value = 0.6
+p.inputs["Specular IOR Level"].default_value = 0.25
 ob.data.materials.clear()
 ob.data.materials.append(final)
 sc = bpy.context.scene
