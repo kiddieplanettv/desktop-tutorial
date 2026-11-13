@@ -126,6 +126,7 @@ meta = {"tile_w": TW, "tile_h": TH, "order": ["F", "B", "Xp", "Xn"], "tiles": {}
 for i, k in enumerate(meta["order"]):
     top, bot, L, R = extents(tiles[k])
     meta["tiles"][k] = {"x0": i * TW, "top": top, "bot": bot, "L": L, "R": R}
+    np.save(os.path.join(OUT, f"{who}_mask_{k}.npy"), tiles[k][..., 3] > 128)
 
 
 def atlas(front):

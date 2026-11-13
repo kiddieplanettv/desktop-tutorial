@@ -42,13 +42,28 @@ def reset(frames, res=(960, 540), samples=6):
     e.use_shadow_high_bitdepth = True
     e.gtao_factor = 1.2
     s.view_settings.view_transform = "Standard"
-    s.view_settings.look = "None"
+    s.view_settings.look = "Medium Contrast"
     s.view_settings.exposure = 0.0
+    vivid(s)
     s.render.image_settings.file_format = "PNG"
     s.render.image_settings.color_mode = "RGB"
     _MATS.clear()
     EVENTS.clear()
     return s
+
+
+def vivid(s, sat=1.12):
+    """Cartoon-style colour grade: richer, more saturated colours (compositor)."""
+    s.use_nodes = True
+    nt = s.node_tree
+    nt.nodes.clear()
+    rl = nt.nodes.new("CompositorNodeRLayers")
+    hs = nt.nodes.new("CompositorNodeHueSat")
+    hs.inputs["Saturation"].default_value = sat
+    hs.inputs["Value"].default_value = 1.02
+    out = nt.nodes.new("CompositorNodeComposite")
+    nt.links.new(rl.outputs["Image"], hs.inputs["Image"])
+    nt.links.new(hs.outputs["Image"], out.inputs["Image"])
 
 
 def world(top=(0.12, 0.42, 0.95), horizon=(0.62, 0.84, 1.0), light=0.55):
@@ -87,7 +102,7 @@ def world(top=(0.12, 0.42, 0.95), horizon=(0.62, 0.84, 1.0), light=0.55):
     return w
 
 
-def sun(energy=5.0, rot=(math.radians(50), math.radians(10), math.radians(35)), angle=6):
+def sun(energy=3.3, rot=(math.radians(50), math.radians(10), math.radians(35)), angle=6):
     d = bpy.data.lights.new("Sun", "SUN")
     d.energy = energy
     d.angle = math.radians(angle)
@@ -1065,7 +1080,7 @@ STATION_Y = 9.0  # front facade y
 
 
 def ground(size=500):
-    g = box("ground", (size, size, 0.2), (40, 0, -0.1), noise_mat("grass2", (0.3, 0.7, 0.18), (0.45, 0.82, 0.25), 0.6, rough=0.85), bevel=0)
+    g = box("ground", (size, size, 0.2), (40, 0, -0.1), noise_mat("grass2", (0.2, 0.6, 0.1), (0.32, 0.72, 0.14), 0.6, rough=0.85), bevel=0)
     return g
 
 
@@ -1106,7 +1121,7 @@ def noise_mat(name, c1, c2, scale=1.0, rough=0.6, bump=0.15):
 def road(x0=-60, x1=200):
     asphalt = noise_mat("asphalt2", (0.36, 0.35, 0.46), (0.44, 0.42, 0.54), 3.0, rough=0.7, bump=0.08)
     line = mat("roadline", (1, 1, 1), rough=0.5)
-    side = noise_mat("sidewalk2", (0.95, 0.82, 0.72), (1.0, 0.9, 0.8), 2.0, rough=0.7, bump=0.05)
+    side = noise_mat("sidewalk2", (0.86, 0.6, 0.48), (0.93, 0.74, 0.6), 2.0, rough=0.7, bump=0.05)
     L = x1 - x0
     box("road", (L, 7.0, 0.06), ((x0 + x1) / 2, 0, 0.03), asphalt, bevel=0)
     for s in (-1, 1):

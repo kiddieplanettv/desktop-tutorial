@@ -53,13 +53,13 @@ cut(96, C2)
 
 # 220-330: Sami sneaks in (walks on tiptoe), grabs the ball and runs
 sfx(220, "sneak", dur=4.5)
-sami.move(220, 290, 68.9, 10.6).add(a3.walk(222, 290, period=22, amp=18, arm=10, bounce=0.02))
+sami.move(220, 290, 68.9, 10.6, gait="sneak")
 sami.face(292, 0)
 pts += [(240, (68.9, 10.2), 0.4), (296, (68.9, 10.2), 0.0)]
 keys(b, "scale", [(298, (1, 1, 1)), (303, (0.001,) * 3), (592, (0.001,) * 3), (596, (1, 1, 1))])
 sami.add(a3.bow(294, 302, deg=30))
 sfx(299, "pop")
-sami.move(306, 346, 74.5, 8.6).add(a3.run(306, 346))
+sami.move(306, 346, 74.5, 8.6, gait="run")
 C3 = camera("C3", [(220, (68.4, 4.6, 1.2), (69.2, 10.6, 0.75)), (330, (69.8, 4.6, 1.2), (70.8, 10.4, 0.75))], lens=28)
 cut(220, C3)
 
@@ -84,10 +84,10 @@ cut(420, C5)
 
 # 500-560: Burak steps out (serious), Sami runs right into him
 bur.expr(500, "angry")
-bur.move(500, 530, 69.2, 3.6).add(a3.walk(500, 530))
-bur.face(532, 0).add(a3.point(536, 566, "R"))
+bur.move(500, 534, 68.6, 3.6, gait="run")
+bur.face(534, 0).add(a3.point(538, 566, "R"))
 sfx(538, "whistle")
-sami.move(500, 540, 70.9, 4.2, heading=-90).add(a3.run(500, 540))
+sami.move(500, 540, 70.9, 4.2, gait="run")
 sami.face(542, -90)
 sami.expr(542, "surprised").add(a3.surprised(542, 566))
 sfx(543, "oops")
@@ -97,10 +97,8 @@ cut(500, C6)
 # 560-640: Sami is ashamed (sad), says sorry and gives the ball back
 sami.face(560, 0)
 sami.expr(568, "sad").add(a3.sad(568, N)).add(a3.bow(586, 620, deg=30))
-for c, x in ((ada, 67.4), (emir, 66.4)):
-    c.root  # kids come over
-ada.move(560, 600, 67.6, 4.7, heading=-30).add(a3.walk(560, 600))
-emir.move(562, 602, 66.3, 4.5, heading=-20).add(a3.walk(562, 602))
+ada.move(560, 600, 67.6, 4.7, gait="run")
+emir.move(562, 602, 66.3, 4.5, gait="run")
 ada.face(604, 0); emir.face(606, 0)
 pts += [(586, (70.9, 4.0), 0.0), (612, (68.0, 4.3), 0.6)]
 sfx(596, "kick", vol=0.5)
@@ -123,4 +121,9 @@ outro_cam("G", 660, 720, (68.6, -1.2, 1.4), (68.6, 4.4, 1.0), up=(0, -2.0, 2.2),
 cut(640, C7)
 cd.ball_path(b, sorted(pts))
 a3.bake_all(N)
-finish(N, "k_preview3")
+_s = bpy.context.scene
+_s.render.resolution_x, _s.render.resolution_y = 1280, 720
+_s.eevee.taa_render_samples = 12
+_s.eevee.use_soft_shadows = True
+_s.eevee.shadow_cascade_size = "2048"
+finish(N, "k_preview4")

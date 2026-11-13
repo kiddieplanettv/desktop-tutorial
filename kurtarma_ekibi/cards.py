@@ -458,8 +458,8 @@ def park(x0, x1, y0, y1):
     """Green park block north of the road with path, fence, flowers, benches."""
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     from lib import noise_mat, tree, lamp_post, flower_patch
-    box("parklawn", (x1 - x0, y1 - y0, 0.06), (cx, cy, 0.03), noise_mat("lawn", (0.35, 0.78, 0.22), (0.5, 0.88, 0.3), 1.2, rough=0.8), bevel=0)
-    box("parkpath", (x1 - x0 - 2, 2.2, 0.04), (cx, y0 + 3.2, 0.07), noise_mat("path", (0.95, 0.85, 0.65), (1.0, 0.92, 0.75), 3.0, rough=0.7), bevel=0)
+    box("parklawn", (x1 - x0, y1 - y0, 0.06), (cx, cy, 0.03), noise_mat("lawn", (0.18, 0.62, 0.08), (0.3, 0.75, 0.12), 1.2, rough=0.8), bevel=0)
+    box("parkpath", (x1 - x0 - 2, 2.2, 0.04), (cx, y0 + 3.2, 0.07), noise_mat("path", (0.86, 0.62, 0.42), (0.93, 0.74, 0.52), 3.0, rough=0.7), bevel=0)
     fence_m = mat("fencew", (1, 1, 1), rough=0.5)
     x = x0
     while x <= x1:

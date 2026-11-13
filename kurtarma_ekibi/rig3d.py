@@ -77,38 +77,73 @@ vz = (co[:, 2] - mn.z) / Hm
 HC = {"F": (co[:, 0] - mn.x) / (mx.x - mn.x), "B": (co[:, 0] - mn.x) / (mx.x - mn.x),
       "Xp": (co[:, 1] - mn.y) / (mx.y - mn.y), "Xn": 1 - (co[:, 1] - mn.y) / (mx.y - mn.y)}
 DIRS = {"F": Vector((0, -1, 0)), "B": Vector((0, 1, 0)), "Xp": Vector((1, 0, 0)), "Xn": Vector((-1, 0, 0))}
-NB = 256
-zb = np.clip((vz * NB).astype(int), 0, NB - 1)
+# Fit the drawing onto the mesh silhouette per view with two similarity transforms (head and body),
+# chosen by best silhouette overlap. No per-row warping -> the face keeps its exact proportions.
+HM = {"F": co[:, 0], "B": co[:, 0], "Xp": co[:, 1], "Xn": -co[:, 1]}
+NECK = mn.z + 0.53 * Hm
+cell = Hm / 320.0
 
 
-def mesh_ext(h):
-    L = np.full(NB, np.nan); R = np.full(NB, np.nan)
-    order = np.argsort(zb)
-    for b in range(NB):
-        sel = h[zb == b]
-        if len(sel):
-            L[b], R[b] = sel.min(), sel.max()
-    idx = np.arange(NB); ok = ~np.isnan(L)
-    L = np.interp(idx, idx[ok], L[ok]); R = np.interp(idx, idx[ok], R[ok])
-    from statistics import median
-    def med(a, k=5):
-        return np.array([median(a[max(0, i - k):i + k + 1]) for i in range(len(a))])
-    return med(L), med(R)
+def fit_view(k, mirror=False):
+    mask = np.load(os.path.join(OUT, f"{who}_mask_{k}.npy"))
+    t = meta["tiles"][k]
+    hm, zm = (-HM[k] if mirror else HM[k]), co[:, 2]
+    cells = np.unique(np.stack([np.floor(hm / cell), np.floor(zm / cell)], 1).astype(np.int32), axis=0)
+    ph, pz = (cells[:, 0] + 0.5) * cell, (cells[:, 1] + 0.5) * cell
+    rows_any = np.nonzero(mask.any(1))[0]
+    s0 = (t["bot"] - t["top"]) / Hm
+    ty0 = t["top"] + s0 * mx.z
+    cols_any = np.nonzero(mask.any(0))[0]
+    tx0 = (cols_any.min() + cols_any.max() + 1) / 2 - s0 * (hm.min() + hm.max()) / 2
+    res = {}
+    for band in ("head", "body"):
+        sel = pz > NECK if band == "head" else pz <= NECK
+        bh, bz = ph[sel], pz[sel]
+
+        def score(sc, tx, ty):
+            c = (sc * bh + tx).astype(np.int32); r = (-sc * bz + ty).astype(np.int32)
+            ok = (c >= 0) & (c < TW) & (r >= 0) & (r < TH)
+            hits = mask[r[ok], c[ok]].sum()
+            neck_row = int(-sc * NECK + ty)
+            draw = mask[:max(0, neck_row)].sum() if band == "head" else mask[max(0, neck_row):].sum()
+            a = (sc * cell) ** 2
+            return hits * a / (len(bh) * a + draw - hits * a + 1e-6)
+
+        best = (-1, s0, tx0, ty0)
+        for sf in np.arange(0.86, 1.15, 0.02):
+            sc = s0 * sf
+            for dx in range(-40, 41, 4):
+                for dy in range(-40, 41, 4):
+                    v = score(sc, tx0 + dx, ty0 + dy)
+                    if v > best[0]:
+                        best = (v, sc, tx0 + dx, ty0 + dy)
+        _, sc, tx, ty = best
+        for sf in np.arange(0.985, 1.016, 0.005):
+            for dx in range(-4, 5):
+                for dy in range(-4, 5):
+                    v = score(sc * sf, tx + dx, ty + dy)
+                    if v > best[0]:
+                        best = (v, sc * sf, tx + dx, ty + dy)
+        res[band] = best
+        print("fit", who, k, band, "mirror" if mirror else "", "iou %.3f" % best[0])
+    w = np.clip((zm - (NECK - 0.03 * Hm)) / (0.06 * Hm), 0, 1)
+    w = w * w * (3 - 2 * w)
+    out = []
+    for band in ("head", "body"):
+        _, sc, tx, ty = res[band]
+        out.append((sc * hm + tx, -sc * zm + ty))
+    col = out[0][0] * w + out[1][0] * (1 - w)
+    row = out[0][1] * w + out[1][1] * (1 - w)
+    uv = np.stack([(t["x0"] + np.clip(col, 0, TW - 1)) / AW, 1 - np.clip(row, 0, TH - 1) / TH], 1)
+    return uv, res["head"][0] + res["body"][0]
 
 
 UVV = {}
 for k in meta["order"]:
-    t = meta["tiles"][k]
-    L, R = np.array(t["L"]), np.array(t["R"])
-    h = HC[k]
-    Lm, Rm = mesh_ext(h)
-    zf = np.clip(vz * NB - 0.5, 0, NB - 1)
-    lm = np.interp(zf, np.arange(NB), Lm); rm = np.interp(zf, np.arange(NB), Rm)
-    row = t["top"] + (1 - vz) * (t["bot"] - t["top"])
-    rl = np.interp(row, np.arange(TH), L); rr = np.interp(row, np.arange(TH), R)
-    frac = (h - lm) / np.maximum(1e-6, rm - lm)
-    px = rl + np.clip(frac, 0, 1) * (rr - rl)
-    UVV[k] = np.stack([(t["x0"] + px) / AW, 1 - row / TH], 1)
+    a_, sa = fit_view(k)
+    b_, sb = fit_view(k, mirror=True)
+    UVV[k] = a_ if sa >= sb else b_
+    print("use", k, "mirror" if sb > sa else "normal")
 
 bm = bmesh.new(); bm.from_mesh(me)
 bm.faces.ensure_lookup_table()
