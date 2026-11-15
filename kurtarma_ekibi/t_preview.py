@@ -9,35 +9,39 @@ from lib import camera, cut, sfx, bake
 N = 720
 LO = "--lo" in sys.argv
 lib.DOF_FSTOP = 16
-s = lib.reset(N, res=(640, 360) if LO else (1280, 720), samples=4 if LO else 12)
+s = lib.reset(N, res=(640, 360) if LO else (1280, 720), samples=4 if LO else 8)
 lib.world(top=(0.1, 0.45, 1.0), horizon=(0.7, 0.9, 1.0), light=0.75)
 lib.sun(energy=3.0, rot=(math.radians(52), 0, math.radians(-35)), angle=14)
 s.eevee.use_soft_shadows = True
 s.eevee.shadow_cascade_size = "2048"
 s.eevee.use_gtao = True
 RX = 12.0
-T.world(RX)
-for k, (x, y, sz, kd) in enumerate(((-6, 7, 1.3, 0), (-1, 10, 1.1, 1), (4, 8, 1.4, 2), (-12, 9, 1.2, 1), (17, 8, 1.3, 0), (21, 11, 1.1, 1),
+T.world(RX, road_w=4.6)
+for k, (x, y, sz, kd) in enumerate(((-6, 9, 1.3, 0), (-1, 12, 1.1, 1), (3, 10, 1.4, 2), (-10, 11, 1.2, 1), (17, 8, 1.3, 0), (21, 11, 1.1, 1),
                                     (26, 7, 1.4, 2), (-9, -17, 1.2, 0), (0, -18, 1.0, 1), (19, -17, 1.3, 2), (30, -16, 1.1, 0),
                                     (-30, 13, 1.3, 1), (-34, -8, 1.2, 0), (8, 13, 1.0, 1), (16, 14, 1.2, 0))):
     T.tree(x, y, sz, kd)
 # base: four hangars in the vehicles' colours
-HX = (-29.0, -24.0, -19.0, -14.0)
-cols = (T.COL["red"], T.COL["orange"], T.COL["blue"], T.COL["yellow"])
+HX = (-30.0, -23.0, -16.0)
+cols = (T.COL["red"], T.COL["orange"], T.COL["blue"])
 for x, c in zip(HX, cols):
-    T.hangar(x, 8.0, c)
-    lib.box("apron", (3.6, 8.2, 0.06), (x, 3.9, 0.0), lib.mat("road", (0.22, 0.22, 0.26)), bevel=0.02)
+    T.hangar(x, 9.0, c, w=5.6, d=12.5, h=5.6)
+    lib.box("apron", (4.6, 9.4, 0.06), (x, 4.5, 0.0), lib.mat("road", (0.22, 0.22, 0.26)), bevel=0.02)
 
-car = T.make_car("kirmizi", T.COL["red"], loc=(HX[0], 9.0), heading=-90)
-crane = T.make_crane("vinc", T.COL["orange"], loc=(HX[1], 10.0), heading=-90)
-flat = T.make_flatbed("tir", T.COL["blue"], loc=(HX[2], 10.5), heading=-90)
-taxi = T.make_car("sari", T.COL["yellow"], loc=(HX[3], 6.0), heading=-90)
-deck = T.bridge_deck()
+car = T.load_toy("car", "kirmizi", loc=(HX[0], 10.0), heading=-90)
+for sd in (-1, 1):
+    lib.sphere("farlamp", 0.13, (1.21, sd * 0.42, 0.66), T.P("lamp", (1.0, 0.95, 0.7), rough=0.1, emit=1.2), car.body, scale=(0.45, 1, 1))
+    lib.sphere("farring", 0.16, (1.19, sd * 0.42, 0.66), T.P("white", T.COL["white"]), car.body, scale=(0.35, 1, 1))
+crane = T.load_toy("crane", "vinc", loc=(HX[1], 16.0), heading=-90)
+T.crane_gear(crane, -1.3, 1.25, boom=8.4)
+flat = T.load_toy("flat", "tir", loc=(HX[2], 13.5), heading=-90)
+flat.bed_z, flat.bed_x = 1.8, -1.3
+deck = T.bridge_deck(L=5.6, W=3.8)
 DZ = flat.bed_z + 0.33
 
 # ---- story
 # 1) the little red car leaves the base and drives to the river
-T.drive_path(car, 8, 185, [(HX[0], 3.0), (-25.5, 0.2), (-18, 0), (0, 0), (8.0, 0)])
+T.drive_path(car, 8, 185, [(HX[0], 3.5), (-26.0, 0.2), (-18, 0), (0, 0), (8.0, 0)])
 sfx(8, "honk"); sfx(20, "truck", dur=6.0)
 T.nod(car, 185, deg=5)
 sfx(183, "brake")
@@ -46,8 +50,8 @@ sfx(204, "question"); sfx(226, "honk")
 T.drive_path(car, 236, 276, [(3.6, 0)], reverse=True)
 sfx(238, "beep_reverse", dur=1.4)
 # 2) help is coming: the crane and the long truck with a new bridge deck
-T.drive_path(flat, 222, 372, [(HX[2], 3.0), (-15.5, 0.2), (-9, 0), (-4, 0), (0.5, -3.4), (6.4, -3.9)])
-T.drive_path(crane, 236, 384, [(HX[1], 3.0), (-20.5, 0.2), (-12, 0), (-4.5, 0), (0.5, 3.4), (8.2, 3.9)])
+T.drive_path(flat, 222, 372, [(HX[2], 4.5), (-11.0, 0.2), (-7, 0), (-4, 0), (0.5, -4.2), (6.0, -4.6)])
+T.drive_path(crane, 236, 384, [(HX[1], 4.5), (-18.0, 0.2), (-12, 0), (-4.5, 0), (0.5, 4.2), (8.0, 4.6)])
 sfx(224, "truck", dur=6.5); sfx(250, "honk")
 T.nod(flat, 372, deg=3); T.nod(crane, 384, deg=3)
 sfx(372, "brake")
@@ -57,11 +61,11 @@ src = flat.at(F_ATT, (flat.bed_x, 0, 0))
 y0, p0, c0 = T.crane_aim(crane, F_ATT, (src.x, src.y), DZ + 0.05)
 y1, p1, c1 = T.crane_aim(crane, F_ATT, (RX, 0), 0.08)
 hy = math.degrees(crane.pose(400)[2])
-T.crane_keys(crane, [(0, -90, 14, 1.2), (236, -90, 14, 1.2), (237, hy, 14, 1.2), (396, hy, 14, 1.2), (428, y0, p0, 1.6),
+T.crane_keys(crane, [(0, -90, 16, 1.2), (236, -90, 16, 1.2), (237, hy, 16, 1.2), (396, hy, 16, 1.2), (428, y0, p0, 1.6),
                      (F_ATT, y0, p0, c0), (F_LIFT, y0, p0 + 4, c0 - 2.0), (F_SWING, y1, p1, c1 - 4.6), (F_DOWN, y1, p1, c1),
                      (F_REL, y1, p1, c1), (600, y1 + 25, p1, 2.0), (N, y1 + 25, p1, 2.0)])
 # the boom follows the truck's heading while driving
-ks = [(f, math.degrees(crane.pose(f)[2]), 14, 1.2) for f in range(236, 397, 2)]
+ks = [(f, math.degrees(crane.pose(f)[2]), 16, 1.2) for f in range(236, 397, 2)]
 crane.ctl = sorted([k for k in crane.ctl if not 236 <= k[0] <= 396] + ks)
 T.crane_bake(crane, N)
 sfx(398, "ratchet", dur=1.4); sfx(430, "ratchet", dur=0.8); sfx(F_ATT, "ding")
@@ -105,12 +109,12 @@ def follow(name, t, f0, f1, off, look=(0, 0, 0.8), lens=35, smooth=12):
 
 c1 = camera("c1", [(0, (-34, -14, 7.5), (-22, 6, 1.5)), (84, (-31, -12, 6.5), (-21, 4, 1.2))], 32)
 c2 = follow("c2", car, 84, 190, (3.5, -7.5, 1.9), look=(0.6, 0, 0.6), lens=38)
-c3 = camera("c3", [(190, (17.2, -6.2, 1.7), (8.4, 0, 0.7)), (262, (16.6, -5.8, 1.9), (7.0, 0, 0.7))], 40)
+c3 = camera("c3", [(190, (18.0, -1.3, 1.7), (8.4, 0, 1.0)), (262, (17.4, -1.1, 1.9), (7.0, 0, 1.0))], 40)
 c4 = follow("c4", flat, 262, 344, (6.5, -10.5, 3.0), look=(-2.0, 1.0, 1.0), lens=30)
 c5 = camera("c5", [(344, (17.5, -11, 6.5), (7.5, 0, 1.2)), (400, (16.5, -10.5, 6.0), (7.5, 0, 1.4))], 30)
 c6 = camera("c6", [(400, (1.5, -10.5, 3.2), (6.0, -2.5, 2.2)), (470, (2.5, -10.0, 3.6), (6.5, -2.0, 3.0))], 34)
 c7 = camera("c7", [(470, (19.0, -9.5, 5.0), (9.5, 0.5, 2.6)), (588, (18.0, -9.0, 4.2), (10.0, 0.3, 1.6))], 30)
-c8 = camera("c8", [(588, (18.2, -7.0, 1.7), (10.0, 0, 0.6)), (640, (18.8, -7.2, 1.8), (13.0, 0, 0.6))], 38)
+c8 = camera("c8", [(588, (21.5, -1.7, 1.4), (10.0, 0, 0.9)), (640, (21.9, -1.8, 1.5), (13.0, 0, 0.9))], 36)
 c9 = camera("c9", [(640, (27.5, -9.0, 3.6), (14.5, 0.5, 1.2)), (N, (26.0, -8.5, 3.2), (14.5, 0.5, 1.2))], 30)
 for f, c in ((0, c1), (84, c2), (190, c3), (262, c4), (344, c5), (400, c6), (470, c7), (588, c8), (640, c9)):
     cut(f, c)

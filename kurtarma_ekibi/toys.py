@@ -132,12 +132,20 @@ def make_crane(name, col, loc=(0, 0), heading=0.0, boom=8.2):
     for x in (1.95, -0.6, -1.9):
         for s in (-1, 1):
             wheel(t, x, s * 1.02, r=0.6, w=0.46, hub=COL["red"])
-    t.pivot = Vector((-1.0, 0, 2.2))
-    t.turret = empty(name + "_turret", (t.pivot.x, 0, 1.4), t.body)
+    crane_gear(t, -1.0, 1.4, boom)
+    return t
+
+
+def crane_gear(t, px, dz, boom=8.2, col=None):
+    """Turret + boom + cable + hook on a vehicle: px = pivot along the vehicle, dz = height of the platform."""
+    name = t.name
+    m2 = P(name + "_2", col or COL["yellow"])
+    t.pivot = Vector((px, 0, dz + 0.8))
+    t.turret = empty(name + "_turret", (px, 0, dz), t.body)
     cyl("ring", 0.85, 0.3, (0, 0, 0.1), P("gray", COL["gray"]), t.turret, bevel=0.06, verts=32)
     box("house", (1.5, 1.3, 0.9), (-0.25, 0, 0.7), m2, t.turret, bevel=0.25, segs=4)
     box("hwin", (0.08, 0.9, 0.4), (0.5, 0, 0.82), P("glass", COL["glass"], rough=0.08, spec=0.9), t.turret, bevel=0.06)
-    t.boom = empty(name + "_boom", (0, 0, t.pivot.z - 1.4), t.turret)
+    t.boom = empty(name + "_boom", (0, 0, 0.8), t.turret)
     box("boom1", (boom * 0.58, 0.5, 0.5), (boom * 0.29 - 0.2, 0, 0), m2, t.boom, bevel=0.12)
     box("boom2", (boom * 0.5, 0.36, 0.36), (boom * 0.75 - 0.1, 0, 0), P("white", COL["white"]), t.boom, bevel=0.09)
     cyl("tipw", 0.26, 0.42, (boom, 0, 0), P("red", COL["red"]), t.boom, rot=(R90, 0, 0), bevel=0.05)
@@ -150,6 +158,27 @@ def make_crane(name, col, loc=(0, 0), heading=0.0, boom=8.2):
     box("block", (0.36, 0.3, 0.44), (0, 0, 0.3), P("red", COL["red"]), t.hook, bevel=0.1)
     lib.torus("hk", 0.16, 0.05, (0, 0, 0.02), P("gray", COL["gray"]), t.hook)
     t.ctl = []
+    return t
+
+
+def load_toy(model, name=None, loc=(0, 0), heading=0.0):
+    """A Meshy-designed vehicle prepared by meshy_vehicle.py (toys3d/<model>.blend): body + turning wheels."""
+    import os, json
+    d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "toys3d")
+    t = Toy(name or model, loc, heading)
+    with bpy.data.libraries.load(os.path.join(d, model + ".blend"), link=False) as (src, dst):
+        dst.collections = list(src.collections[:1])
+    col = dst.collections[0]
+    bpy.context.scene.collection.children.link(col)
+    meta = json.load(open(os.path.join(d, model + ".json")))
+    for o in col.objects:
+        if "_wheel" in o.name:
+            o.parent = t.root
+            t.wheels.append(o)
+        else:
+            o.parent = t.body
+    t.r = sum(w["r"] for w in meta["wheels"]) / max(1, len(meta["wheels"]))
+    t.meta = meta
     return t
 
 
@@ -336,7 +365,7 @@ def hangar(x, y, col, w=4.2, d=6.0, h=3.4):
     return root
 
 
-def world(river_x=12.0, river_w=4.8):
+def world(river_x=12.0, river_w=4.8, road_w=4.6):
     """Green toy land: a road along X, a river along Y with a missing bridge, hangars to the west."""
     g = mat("ground", (0.3, 0.72, 0.2), rough=0.85, spec=0.1)
     x0, x1 = river_x - river_w / 2, river_x + river_w / 2
@@ -349,16 +378,16 @@ def world(river_x=12.0, river_w=4.8):
     rd = mat("road", (0.22, 0.22, 0.26), rough=0.7, spec=0.2)
     ed = P("cream", COL["cream"], rough=0.6)
     for a, b in ((-60, x0 + 0.05), (x1 - 0.05, 60)):
-        box("road", (b - a, 4.0, 0.06), ((a + b) / 2, 0, 0.0), ed, bevel=0.02)
-        box("road_top", (b - a, 3.4, 0.06), ((a + b) / 2, 0, 0.012), rd, bevel=0.02)
+        box("road", (b - a, road_w + 0.6, 0.06), ((a + b) / 2, 0, 0.0), ed, bevel=0.02)
+        box("road_top", (b - a, road_w, 0.06), ((a + b) / 2, 0, 0.012), rd, bevel=0.02)
         n = int((b - a) / 3)
         for k in range(n):
             box("dash", (1.1, 0.14, 0.02), (a + 1.5 + k * 3, 0, 0.045), P("white", COL["white"]), bevel=0)
     # broken bridge stubs
     for xx in (x0 - 0.15, x1 + 0.15):
         for s in (-1, 1):
-            cyl("post", 0.2, 1.0, (xx, s * 1.9, 0.5), P("red", COL["red"]), verts=16, bevel=0.05)
-            sphere("postcap", 0.26, (xx, s * 1.9, 1.05), P("white", COL["white"]))
+            cyl("post", 0.2, 1.0, (xx, s * (road_w / 2 + 0.35), 0.5), P("red", COL["red"]), verts=16, bevel=0.05)
+            sphere("postcap", 0.26, (xx, s * (road_w / 2 + 0.35), 1.05), P("white", COL["white"]))
     # hills far away
     r = random.Random(4)
     for k in range(16):
