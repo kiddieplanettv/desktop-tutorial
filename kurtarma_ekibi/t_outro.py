@@ -16,7 +16,7 @@ C.shot(0, 196, (19.5, -10.5, 3.8), (12.5, 0, 1.3), (18.5, -10.0, 3.4), (11.0, 0,
 CUT = 196
 for k, n in enumerate(order):
     T.place(V[n], CUT, HX[n] + 16.0 + k * 3.0, 0, 180)
-    f = T.drive_path(V[n], CUT + 4 + k * 6, CUT + 96 + k * 6, [(HX[n] + 4.0, 0.3), (HX[n], 4.6)])
+    f = T.drive_path(V[n], CUT + 4 + k * 6, CUT + 96 + k * 6, [(HX[n] + 5.0, 0.1), (HX[n] + 1.3, 0.9), (HX[n], 2.6), (HX[n], 4.8)])
     T.nod(V[n], f, deg=3)
 sfx(CUT + 4, "truck", dur=4.5)
 for k, n in enumerate(order):
