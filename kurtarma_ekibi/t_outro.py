@@ -10,7 +10,7 @@ xs = dict(car=22, tow=28, dump=36, crane=45, flat=55)
 V = fleet({n: (xs[n], 0, 180) for n in order})
 C = Cams()
 for k, n in enumerate(order):
-    T.go(V[n], 4 + k * 4, [(RX, 0), (-6, 0), (-14, 0)], speed=7.5)
+    T.drive_path(V[n], 4 + k * 4, 174 + k * 4, [(xs[n] - 46.0, 0)])
 sfx(4, "truck", dur=7.5); sfx(30, "honk"); sfx(80, "honk"); sfx(130, "honk")
 C.shot(0, 196, (19.5, -10.5, 3.8), (12.5, 0, 1.3), (18.5, -10.0, 3.4), (11.0, 0, 1.3), lens=30)
 CUT = 196

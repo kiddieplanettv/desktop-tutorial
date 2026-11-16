@@ -21,8 +21,12 @@ COL = dict(red=(0.93, 0.07, 0.07), yellow=(1.0, 0.74, 0.02), orange=(1.0, 0.38, 
            dark=(0.05, 0.05, 0.06), gray=(0.6, 0.62, 0.66), glass=(0.3, 0.62, 0.95))
 
 
+ALL = []
+
+
 class Toy:
     def __init__(self, name, loc=(0, 0), heading=0.0):
+        ALL.append(self)
         self.name = name
         self.root = empty(name, (loc[0], loc[1], 0))
         self.root.rotation_euler.z = math.radians(heading)
@@ -297,6 +301,8 @@ def _trap(u, r=0.25):
 
 def drive_path(t, f0, f1, pts, reverse=False, lean=1.0):
     """Drive along a smooth path through pts between f0 and f1 (starts and stops softly)."""
+    if t.track and max(t.track) > f0:
+        print("RETIME", t.name, "drive at", f0, "starts before the previous one ends at", max(t.track))
     path = _spline([t.last[:2]] + list(pts))
     acc = [0.0]
     for a, b in zip(path, path[1:]):
@@ -596,6 +602,12 @@ def place(t, f, x, y, heading):
     """Jump to a new spot at frame f (use at a camera cut)."""
     h = math.radians(heading)
     px, py, ph = t.pose(f - 1)
+    for k in [k for k in t.track if k > f]:                      # an earlier drive must not reach past the jump
+        del t.track[k]
+    ad = t.root.animation_data
+    for fc in (ad.action.fcurves if ad and ad.action else ()):
+        for kp in [kp for kp in fc.keyframe_points if kp.co.x > f]:
+            fc.keyframe_points.remove(kp)
     bake(t.root, "location", [f - 1, f], [(px, py, 0), (x, y, 0)])
     bake(t.root, "rotation_euler", [f - 1, f], [(0, 0, ph), (0, 0, h)])
     t.track[f - 1] = (px, py, ph); t.track[f] = (x, y, h)
@@ -641,3 +653,35 @@ def roll(b, pts, hop=0.0):
             R.append((-math.sin(th) * (ang + d * e / r), math.cos(th) * (ang + d * e / r), 0))
         ang += d / r
         bake(b, "location", frames, L); bake(b, "rotation_euler", frames, R)
+
+
+def overlaps(N, margin=0.25):
+    """Frames where the footprints (length x width boxes, grown by margin) of two vehicles intersect.
+    Returns [(name_a, name_b, first_frame, last_frame, deepest overlap in m)]."""
+    def box(t, f):
+        x, y, h = t.pose(f)
+        return x, y, math.cos(h), math.sin(h), t.meta["length"] / 2 + margin / 2, t.meta["width"] / 2 + margin / 2
+
+    def depth(a, b):
+        d = (b[0] - a[0], b[1] - a[1])
+        best = 1e9
+        for ux, uy in ((a[2], a[3]), (-a[3], a[2]), (b[2], b[3]), (-b[3], b[2])):
+            ra = a[4] * abs(ux * a[2] + uy * a[3]) + a[5] * abs(-ux * a[3] + uy * a[2])
+            rb = b[4] * abs(ux * b[2] + uy * b[3]) + b[5] * abs(-ux * b[3] + uy * b[2])
+            best = min(best, ra + rb - abs(d[0] * ux + d[1] * uy))
+            if best <= 0:
+                return 0.0
+        return best
+
+    ts = [t for t in ALL if hasattr(t, "meta")]
+    out = []
+    for i, a in enumerate(ts):
+        for b in ts[i + 1:]:
+            run = None
+            for f in range(1, N + 2):
+                dp = depth(box(a, f), box(b, f)) if f <= N else 0.0
+                if dp > 0:
+                    run = [f, f, dp] if run is None else [run[0], f, max(run[2], dp)]
+                elif run:
+                    out.append((a.name, b.name, run[0], run[1], round(run[2], 2))); run = None
+    return out

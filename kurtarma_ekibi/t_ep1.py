@@ -24,15 +24,15 @@ C.shot(fa + 14, fb + 10, (18.0, -1.3, 1.7), (8.4, 0, 1.0), (17.4, -1.1, 1.9), (7
 
 # 2) help sets off: the long truck (with a new bridge deck) and the crane
 f1 = fb + 10
-T.drive_path(flat, f1 + 6, f1 + 108, exit_pts("flat") + [(4, 0)])
-T.drive_path(crane, f1 + 30, f1 + 108, exit_pts("crane") + [(-10, 0)])
+T.drive_path(flat, f1 + 6, f1 + 108, exit_pts("flat") + [(-3, 0)])
+T.drive_path(crane, f1 + 30, f1 + 108, exit_pts("crane"))
 sfx(f1 + 6, "truck", dur=6.0); sfx(f1 + 20, "honk"); sfx(f1 + 44, "honk")
 C.shot(f1, f1 + 110, (-8, -16, 6.5), (-19, 6, 2.0), (-6, -14, 5.5), (-16, 3, 1.8), lens=30)
 f2 = f1 + 110
 T.place(flat, f2, -20, 0, 0); T.place(crane, f2, -31, 0, 0)
 T.drive_path(flat, f2, f2 + 170, [(-7, 0), (-4, 0), (0.5, -4.2), (6.0, -4.6)])
-T.drive_path(crane, f2 + 4, f2 + 190, [(-12, 0), (-4.5, 0), (0.5, 4.2), (8.0, 4.6)])
-T.nod(flat, f2 + 170, deg=3); T.nod(crane, f2 + 190, deg=3); sfx(f2 + 168, "brake"); sfx(f2 + 60, "truck", dur=5.0)
+T.drive_path(crane, f2 + 44, f2 + 198, [(-12, 0), (-4.5, 0), (0.5, 4.2), (8.0, 4.6)])
+T.nod(flat, f2 + 170, deg=3); T.nod(crane, f2 + 198, deg=3); sfx(f2 + 168, "brake"); sfx(f2 + 60, "truck", dur=5.0)
 C.follow(f2, f2 + 96, flat, (7.0, -11.0, 3.2), look=(-2.5, 1.0, 1.2), lens=30)
 C.shot(f2 + 96, f2 + 200, (18.0, -11.5, 6.8), (7.5, 0, 1.2), (17.0, -11, 6.2), (7.5, 0, 1.4), lens=30)
 
@@ -62,11 +62,11 @@ C.shot(f4, fc - 28, (21.5, -1.7, 1.4), (10.0, 0, 0.9), (21.9, -1.8, 1.5), (13.0,
 C.shot(fc - 28, fc + 96, (28.5, -9.5, 3.8), (15.0, 0.5, 1.2), (27.0, -9.0, 3.4), (15.0, 0.5, 1.2), lens=30)
 T.hop(flat, fc + 14, n=2, h=0.16); T.hop(crane, fc + 18, n=2, h=0.14); sfx(fc + 16, "honk")
 f5 = fc + 96
-g = T.go(car, f5, [(40, 0), (70, 0)], speed=6.0)
+g = T.go(car, f5, [(40, 0), (104, 0)], speed=7.0)
 T.drive_path(flat, f5 + 10, f5 + 150, [(2.0, -3.0), (-3.5, -0.3), (-9, 0)], reverse=True); sfx(f5 + 10, "beep_reverse", dur=2.0)
-T.go(flat, f5 + 156, [(RX, 0), (40, 0), (72, 0)], speed=6.0)
-T.drive_path(crane, f5 + 150, f5 + 260, [(3.0, 3.6), (-2.0, 0.6), (-6.5, 0)], reverse=True)
-T.go(crane, f5 + 266, [(RX, 0), (40, 0), (70, 0)], speed=6.0)
+T.go(flat, f5 + 156, [(RX, 0), (40, 0), (90, 0)], speed=6.0)
+T.drive_path(crane, f5 + 268, f5 + 352, [(3.0, 3.6), (-2.0, 0.6), (-6.5, 0)], reverse=True)
+T.go(crane, f5 + 358, [(RX, 0), (40, 0)], speed=6.0)
 sfx(f5 + 156, "truck", dur=6.0); sfx(f5 + 200, "honk"); sfx(f5 + 300, "honk")
 C.shot(f5, f5 + 190, (1.5, -9.5, 3.0), (6.0, -1.5, 1.2), (3.0, -9.0, 2.8), (9.0, -0.5, 1.2), lens=30)
 C.shot(f5 + 190, f5 + 300, (16.5, -6.5, 1.5), (11.0, 0, 1.2), lens=30)
