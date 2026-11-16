@@ -7,6 +7,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LO = "--lo" in sys.argv
 MID = "--mid" in sys.argv          # 720x1280 preview
 FPS = 24
+BEAT = 12                           # frames per beat: 120 BPM
 N = 1440
 if "--frames" in sys.argv:
     N = int(sys.argv[sys.argv.index("--frames") + 1])
@@ -138,7 +139,7 @@ class Car:
     def __init__(self, kind):
         self.kind = kind; sp = SPEC[kind]; self.sp = sp
         L, W, H = sp["L"], sp["W"], sp["H"]
-        self.root = empty(kind); self.b = empty(kind + "_bounce", parent=self.root)
+        self.root = empty(kind); self.d = empty(kind + "_dance", parent=self.root); self.b = empty(kind + "_bounce", parent=self.d)
         self.wheels = []; self.spin = 0.0; self.pos = (0.0, 0.0); self.rz = 0.0
         body_m = mat(kind + "_body", sp["col"], rough=0.3, spec=0.6)
         glass = mat("glass", C["glass"], rough=0.08, spec=1.0)
@@ -381,6 +382,36 @@ class Car:
             key(b, "rotation_euler", a, (0, 0, 0)); key(b, "rotation_euler", a + dur // 2, (0, tilt, 0)); key(b, "rotation_euler", a + dur, (0, 0, 0))
             key(b, "scale", a + dur - 2, (0.94, 0.94, 1.1)); key(b, "location", a + dur, (0, 0, 0))
             key(b, "scale", a + dur + 1, (1.14, 1.14, 0.8)); key(b, "scale", a + dur + 5, (1, 1, 1))
+
+    def groove(self, f0, f1, amp=1.0):
+        """Bob and rock in time with the music (one beat = BEAT frames) - on its own layer, so it adds to everything else."""
+        d = self.d; f = (f0 + BEAT - 1) // BEAT * BEAT; i = f // BEAT
+        key(d, "scale", f0, (1, 1, 1)); key(d, "rotation_euler", f0, (0, 0, 0)); key(d, "location", f0, (0, 0, 0))
+        while f + BEAT <= f1:
+            sg = 1 if i % 2 else -1
+            key(d, "scale", f, (1 + 0.05 * amp, 1 + 0.05 * amp, 1 - 0.09 * amp)); key(d, "scale", f + BEAT // 2, (1 - 0.03 * amp, 1 - 0.03 * amp, 1 + 0.06 * amp))
+            key(d, "rotation_euler", f, (0, 0, 0)); key(d, "rotation_euler", f + BEAT // 2, (sg * R(6) * amp, 0, 0))
+            f += BEAT; i += 1
+        key(d, "scale", f, (1, 1, 1)); key(d, "rotation_euler", f, (0, 0, 0)); key(d, "location", f, (0, 0, 0))
+
+    def dance(self, f0, f1, spin=True, phase=0):
+        """Proper dancing: big side-to-side rocking, twisting, little jumps on the beat and a spin at the end."""
+        d = self.d; f = (f0 + BEAT - 1) // BEAT * BEAT; i = f // BEAT + phase
+        key(d, "scale", f0, (1, 1, 1)); key(d, "rotation_euler", f0, (0, 0, 0)); key(d, "location", f0, (0, 0, 0))
+        nb = (f1 - f) // BEAT; k = 0
+        while f + BEAT <= f1:
+            sg = 1 if i % 2 else -1; h = BEAT // 2
+            last = spin and k == nb - 1
+            key(d, "scale", f, (1.1, 1.1, 0.84)); key(d, "location", f, (0, 0, 0))
+            key(d, "scale", f + h, (0.94, 0.94, 1.1)); key(d, "location", f + h, (0, 0, 0.55 if last else 0.28))
+            if last:
+                key(d, "rotation_euler", f, (0, 0, 0)); key(d, "rotation_euler", f + BEAT, (0, 0, 2 * math.pi))
+            else:
+                tw = R(16) * (1 if (i // 2) % 2 else -1)
+                key(d, "rotation_euler", f, (0, 0, tw)); key(d, "rotation_euler", f + h, (sg * R(13), 0, tw))
+            f += BEAT; i += 1; k += 1
+        key(d, "scale", f, (1, 1, 1)); key(d, "location", f, (0, 0, 0))
+        d.rotation_euler = (0, 0, 0); d.keyframe_insert("rotation_euler", frame=f + 1)
 
     def wiggle(self, f0, f1, amp=0.07, per=6):
         b = self.b
@@ -669,6 +700,7 @@ shot(0, 96, (T0 + 0.8, -10.0, 1.5), (T0 - 0.5, 0, 2.0), (T0 + 0.4, -7.6, 1.4), (
 truck.look(56, 1); truck.turn(52, 60, -30); truck.look(72, -1); truck.turn(68, 78, -95); truck.blink(82)
 truck.look(90, 0); truck.turn(86, 94, -62)
 question((T0 + 0.2, -0.6, 3.5), 54, 94)
+truck.groove(48, 96, 1.0)
 
 
 def seeker(f0, f1):
@@ -679,6 +711,7 @@ def seeker(f0, f1):
     truck.look(f0 + 10, 1); truck.turn(f0 + 6, f0 + 16, -35); truck.look(f0 + 30, -1); truck.turn(f0 + 26, f0 + 38, -92)
     truck.blink(f0 + 22); question((T0 + 0.2, -0.6, 3.5), f0 + 6, f1 - 2)
     truck.look(f1 - 6, 0); truck.turn(f1 - 10, f1 - 2, -62)
+    truck.groove(f0, f1 - 1, 1.0)
 
 
 def found(car, f, x0, hx, side=1):
@@ -687,7 +720,9 @@ def found(car, f, x0, hx, side=1):
     truck.move(f + 2, f + 34, x0 - side * 1.6, -0.7, -90 + side * 22)
     truck.squash(f + 36); truck.mouth(f + 30, True); truck.look(f + 30, -side * 0.6, dur=2)
     car.look(f + 26, side * 0.8 * (-1), dur=6)
-    truck.hop(f + 44, 0.55, 12, 2); car.hop(f + 50, 0.6, 12, 2)
+    car.groove(f + 2, f + 36, 1.0)
+    e = (f + 90) // BEAT * BEAT
+    truck.dance(f + 38, e, phase=0); car.dance(f + 38, e, phase=1)
     truck.blink(f + 40); car.blink(f + 46)
     truck.mouth(f + 86, False); truck.look(f + 88, 0)
 
@@ -707,7 +742,7 @@ def round_orange(f0):
     key(car.b, "location", a + 14, (0, 0, 0)); key(car.b, "location", a + 24, (0, 0, 1.75)); car.look(a + 26, -1); car.look(a + 36, 1)
     car.blink(a + 31); key(car.b, "location", a + 40, (0, 0, 1.75)); key(car.b, "location", a + 46, (0, 0, 0))
     b = a + 60                                              # jump out
-    shot(b, b + 112, (x0 + 1.2, -8.8, 1.4), (x0 + 1.2, -1.0, 1.9), (x0 + 0.1, -12.2, 1.6), (x0, -1.0, 2.0), lens=32)
+    shot(b, b + 112, (x0 + 1.2, -8.8, 1.4), (x0 + 1.2, -1.0, 2.5), (x0 + 0.1, -12.2, 1.6), (x0, -1.0, 3.1), lens=32)
     car.root.keyframe_insert("location", frame=b + 2); car.root.keyframe_insert("rotation_euler", frame=b + 2)
     car.root.location = (x0 + 1.5, -1.7, 0); car.root.rotation_euler = (0, 0, R(-76)); car.pos = (x0 + 1.5, -1.7)
     car.root.keyframe_insert("location", frame=b + 18); car.root.keyframe_insert("rotation_euler", frame=b + 18)
@@ -733,7 +768,7 @@ def round_banana(f0):
     car.blink(a + 32); car.look(a + 38, -1); car.big_eyes(a + 40, 6)
     car.turn(a + 48, a + 52, 180); car.move(a + 50, a + 60, x0 - 0.2, 2.6, back=True)
     b = a + 64
-    shot(b, b + 114, (x0 - 1.4, -9.6, 1.4), (x0 - 1.6, -0.5, 1.9), (x0 - 0.1, -12.6, 1.6), (x0, -1.0, 2.0), lens=32)
+    shot(b, b + 114, (x0 - 1.4, -9.6, 1.4), (x0 - 1.6, -0.5, 2.5), (x0 - 0.1, -12.6, 1.6), (x0, -1.0, 3.1), lens=32)
     car.move(b + 2, b + 20, x0 - 3.6, 2.2, 225)
     car.move(b + 20, b + 40, x0 - 1.7, -1.9, 296)
     car.squash(b + 42, 0.14); car.mouth(b + 30, True); car.big_eyes(b + 30, 10); car.look(b + 30, 0)
