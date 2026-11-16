@@ -8,6 +8,7 @@ from lib import camera, cut, sfx, bake
 
 RX = 12.0
 LO = "--lo" in sys.argv
+HD = "--hd" in sys.argv          # 1920x1080, smoother edges: for a PC with a graphics card
 DRY = "--dry" in sys.argv
 SURF = []
 SCATTER = []
@@ -21,7 +22,7 @@ def setup(N, bridge=True, clear=(), pads=(), dirt=()):
     pads / dirt: paved / dirt areas beside the road where the vehicles may drive and park."""
     import scenery as SC
     lib.DOF_FSTOP = 16
-    s = lib.reset(N, res=(640, 360) if LO else (1280, 720), samples=3 if LO else 6)
+    s = lib.reset(N, res=(640, 360) if LO else (1920, 1080) if HD else (1280, 720), samples=3 if LO else 24 if HD else 6)
     lib.world(top=(0.1, 0.45, 1.0), horizon=(0.7, 0.9, 1.0), light=0.75)
     lib.sun(energy=3.0, rot=(math.radians(52), 0, math.radians(-35)), angle=14)
     s.eevee.use_soft_shadows = True

@@ -9,8 +9,8 @@ from mathutils import Vector, Euler
 FPS = 24
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(HERE, "build")
-FONT_TEXT = "/usr/share/fonts/truetype/comfortaa/Comfortaa-Bold.ttf"
-FONT_SYM = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_TEXT = os.path.join(HERE, "fonts", "Comfortaa-Bold.ttf")
+FONT_SYM = os.path.join(HERE, "fonts", "DejaVuSans-Bold.ttf")
 
 # ----------------------------------------------------------------------------
 # scene / render setup
