@@ -183,20 +183,26 @@ def load_toy(model, name=None, loc=(0, 0), heading=0.0):
 
 
 def crane_keys(t, seq):
-    """seq: (frame, yaw_deg in world, pitch_deg, cable_length). Eased between keys."""
-    t.ctl = sorted(seq)
+    """seq: (frame, yaw_deg, pitch_deg, cable_length[, rel]). rel=True: yaw is relative to the truck's heading
+    (boom stowed while driving), otherwise yaw is a world direction. Eased between keys."""
+    t.ctl = sorted(tuple(k) + ((False,) if len(k) == 4 else ()) for k in list(t.ctl) + list(seq))
 
 
 def crane_state(t, f):
     ks = t.ctl
+    hd = math.degrees(t.pose(f)[2])
+    def ab(k):
+        return (k[1] + hd if k[4] else k[1], k[2], k[3])
     if f <= ks[0][0]:
-        return ks[0][1:]
+        return ab(ks[0])
     for a, b in zip(ks, ks[1:]):
         if a[0] <= f <= b[0]:
             u = (f - a[0]) / max(1, b[0] - a[0])
             u = u * u * (3 - 2 * u)
-            return tuple(a[i] + (b[i] - a[i]) * u for i in (1, 2, 3))
-    return ks[-1][1:]
+            A, B = ab(a), ab(b)
+            dy = (B[0] - A[0] + 180) % 360 - 180
+            return (A[0] + dy * u, A[1] + (B[1] - A[1]) * u, A[2] + (B[2] - A[2]) * u)
+    return ab(ks[-1])
 
 
 def crane_tip(t, f):
@@ -377,7 +383,7 @@ def world(river_x=12.0, river_w=4.8, road_w=4.6):
         box("deco_bank", (0.5, 240, 0.9), (xx + s * 0.2, 0, -0.42), P("sand", (0.95, 0.83, 0.55), rough=0.8), bevel=0.2, rot=(0, s * math.radians(-18), 0))
     rd = mat("road", (0.22, 0.22, 0.26), rough=0.7, spec=0.2)
     ed = P("cream", COL["cream"], rough=0.6)
-    for a, b in ((-60, x0 + 0.05), (x1 - 0.05, 60)):
+    for a, b in ((-110, x0 + 0.05), (x1 - 0.05, 128)):
         box("road", (b - a, road_w + 0.6, 0.06), ((a + b) / 2, 0, 0.0), ed, bevel=0.02)
         box("road_top", (b - a, road_w, 0.06), ((a + b) / 2, 0, 0.012), rd, bevel=0.02)
         n = int((b - a) / 3)
@@ -390,12 +396,12 @@ def world(river_x=12.0, river_w=4.8, road_w=4.6):
             sphere("postcap", 0.26, (xx, s * (road_w / 2 + 0.35), 1.05), P("white", COL["white"]))
     # hills far away
     r = random.Random(4)
-    for k in range(16):
-        a = -70 + k * 9.5
+    for k in range(26):
+        a = -95 + k * 9.5
         s = r.uniform(9, 16)
         sphere("hill", s, (a, r.uniform(34, 50), -s * 0.45), mat("hill%d" % (k % 2), [(0.3, 0.74, 0.2), (0.42, 0.84, 0.26)][k % 2], rough=0.9, spec=0.05),
                scale=(1.6, 1, 0.75), segs=28, rings=14)
-    for k, (x, y, z, s) in enumerate(((-18, 30, 13, 1.6), (4, 38, 16, 2.0), (24, 30, 12, 1.4), (-40, 36, 15, 1.8), (40, 40, 17, 2.0))):
+    for k, (x, y, z, s) in enumerate(((-18, 30, 13, 1.6), (4, 38, 16, 2.0), (24, 30, 12, 1.4), (-40, 36, 15, 1.8), (40, 40, 17, 2.0), (58, 32, 13, 1.5), (78, 38, 16, 1.9), (98, 31, 13, 1.5), (-62, 32, 14, 1.6))):
         cloud(x, y, z, s)
 
 
@@ -411,3 +417,186 @@ def bridge_deck(L=5.6, W=3.0):
         box("kerb", (L - 1.0, 0.16, 0.16), (0, s * (W / 2 - 0.08), 0.08), P("red", COL["red"]), root, bevel=0.06)
     cyl("eye", 0.14, 0.08, (0, 0, 0.03), P("gray", COL["gray"]), root, bevel=0.02)
     return root
+
+
+# ---------------------------------------------------------------- more helpers for the long video
+
+def path_len(t, pts):
+    path = _spline([t.last[:2]] + list(pts))
+    return sum((b - a).length for a, b in zip(path, path[1:]))
+
+
+def go(t, f0, pts, speed=5.0, reverse=False, lean=1.0):
+    """Drive through pts starting at f0 at about `speed` metres per second. Returns the arrival frame."""
+    n = max(12, int(round(path_len(t, pts) / speed * lib.FPS / 0.75)))
+    return drive_path(t, f0, f0 + n, pts, reverse=reverse, lean=lean)
+
+
+STOW = (0.0, 16.0, 1.2, True)
+
+
+def crane_job(t, f0, src, src_z, dst, dst_z, lift=2.2, pace=1.0):
+    """Keys for: aim at src, lower the hook, lift, swing to dst, lower, release, stow. The crane must be parked.
+    Returns (attach frame, touch-down frame, end frame)."""
+    d = [int(x * pace) for x in (34, 20, 26, 54, 38, 12, 40)]
+    y0, p0, c0 = crane_aim(t, f0, src, src_z)
+    y1, p1, c1 = crane_aim(t, f0, dst, dst_z)
+    fa = f0 + d[0] + d[1]; fl = fa + d[2]; fs = fl + d[3]; fd = fs + d[4]; fr = fd + d[5]; fe = fr + d[6]
+    crane_keys(t, [(f0,) + STOW, (f0 + d[0], y0, p0, 1.6), (fa, y0, p0, c0), (fl, y0, min(80, p0 + 5), c0 - lift),
+                   (fs, y1, p1, max(1.0, c1 - lift - 1.5)), (fd, y1, p1, c1), (fr, y1, p1, c1), (fe,) + STOW])
+    return fa, fd, fe
+
+
+def hang_bake(t, obj, N, jobs, before, dz=0.05, sway=0.05):
+    """obj rides on the hook between each (attach, down, after_loc, after_rotz) in jobs; before(f) -> (loc, rotz)."""
+    frames = list(range(N + 1)); L, R = [], []
+    jobs = sorted(jobs)
+    for f in frames:
+        cur = None; done = None
+        for j in jobs:
+            if j[0] <= f <= j[1]:
+                cur = j
+            if f > j[1]:
+                done = j
+        if cur:
+            hk = crane_tip(t, f)[1]
+            prev = [j for j in jobs if j[1] < cur[0]]
+            r0 = prev[-1][3] if prev else before(cur[0])[1]
+            u = (f - cur[0]) / max(1, cur[1] - cur[0]); u = u * u * (3 - 2 * u)
+            sw = sway * math.sin((f - cur[0]) * 0.33) * max(0.0, min(1.0, (f - cur[0]) / 12, (cur[1] - f) / 14))
+            L.append((hk.x, hk.y, hk.z - dz)); R.append((sw * 0.5, sw, r0 + (cur[3] - r0) * u))
+        elif done:
+            if callable(done[2]):
+                p, r = done[2](f); L.append(tuple(p)); R.append((0, 0, r))
+            else:
+                L.append(tuple(done[2])); R.append((0, 0, done[3]))
+        else:
+            p, r = before(f); L.append(tuple(p)); R.append((0, 0, r))
+    bake(obj, "location", frames, L); bake(obj, "rotation_euler", frames, R)
+
+
+def split(ob, name, test, origin, parent):
+    """Cut the faces whose vertices all pass test(co) out of ob into a new object with the given origin."""
+    import bmesh
+    me = ob.data
+    bpy.context.view_layer.objects.active = ob
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    ob.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="DESELECT"); bpy.ops.object.mode_set(mode="OBJECT")
+    ok = [test(v.co) for v in me.vertices]
+    for p in me.polygons:
+        p.select = all(ok[i] for i in p.vertices)
+    before = set(bpy.data.objects)
+    bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.separate(type="SELECTED"); bpy.ops.object.mode_set(mode="OBJECT")
+    new = (set(bpy.data.objects) - before).pop()
+    from mathutils import Matrix
+    new.data.transform(Matrix.Translation(-Vector(origin)))
+    new.parent = parent; new.location = origin; new.name = name
+    return new
+
+
+def dump_gear(t):
+    """Make the dump truck's bucket tip around its rear hinge; a sand load can lie in it."""
+    body = next(o for o in t.body.children if o.type == "MESH")
+    t.bucket = split(body, t.name + "_bucket", lambda c: (c.z > 1.5 and c.x < 1.02) or (c.z > 3.33 and c.x < 2.15), (-2.1, 0, 1.45), t.body)
+    t.sand = sphere(t.name + "_sand", 1.0, (1.1, 0, 0.95), P("sandpile", (0.98, 0.8, 0.42), rough=0.85, spec=0.1), t.bucket, scale=(1.75, 1.0, 0.75), segs=32, rings=16)
+    t.sand.scale = (0.001, 0.001, 0.001)
+    return t
+
+
+def tip(t, f0, f1, deg=48, hold=40):
+    """Raise the bucket (f0..f1), hold, lower again. Returns the end frame."""
+    a = -math.radians(deg)
+    lib.keys(t.bucket, "rotation_euler", [(f0, (0, 0, 0)), (f1, (0, a, 0)), (f1 + hold, (0, a, 0)), (f1 + hold + (f1 - f0), (0, 0, 0))])
+    return f1 + hold + (f1 - f0)
+
+
+def spin_wheels(t, f0, f1, speed=9.0, which=None):
+    """Wheels spinning on the spot (stuck in the mud)."""
+    frames = list(range(f0, f1 + 1)); d0 = t.dist; vals = []
+    for f in frames:
+        e = min(1.0, (f - f0) / 8, (f1 - f) / 8)
+        t.dist += speed * max(0.0, e) / lib.FPS
+        vals.append((0, t.dist / t.r, 0))
+    for w in (which if which is not None else t.wheels):
+        bake(w, "rotation_euler", frames, vals)
+
+
+def rope(name, pa, pb, f0, f1, r=0.035):
+    """A taut rope between two moving points pa(f), pb(f) (visible only between f0 and f1)."""
+    root = empty(name)
+    cyl("rp", r, 1.0, (0, 0, 0.5), P("rope", (0.95, 0.85, 0.3), rough=0.7), root, verts=8)
+    frames = list(range(f0, f1 + 1)); L, R, S = [], [], []
+    for f in frames:
+        a, b = Vector(pa(f)), Vector(pb(f)); d = b - a
+        L.append(tuple(a)); S.append((1, 1, max(0.01, d.length)))
+        R.append(tuple(d.to_track_quat("Z", "Y").to_euler()))
+    bake(root, "location", frames, L); bake(root, "rotation_euler", frames, R); bake(root, "scale", frames, S)
+    lib.keys(root, "scale", [(f0 - 1, (0, 0, 0))]) if f0 > 0 else None
+    lib.key(root, "scale", f1 + 1, (0, 0, 0))
+    return root
+
+
+def body_keys(t, seq):
+    """seq: (frame, dz, pitch_deg, roll_deg) for the sprung body (sinking, leaning)."""
+    lib.keys(t.body, "location", [(f, (0, 0, dz)) for f, dz, p, r in seq])
+    lib.keys(t.body, "rotation_euler", [(f, (math.radians(r), math.radians(p), 0)) for f, dz, p, r in seq])
+
+
+def beacon(t, loc, f0, f1, col=(1.0, 0.45, 0.0)):
+    """A flashing light glow on a vehicle."""
+    m = mat(t.name + "_beacon", col, rough=0.2, emit=0.0, unique=True)
+    sphere("beacon", 0.2, loc, m, t.body, scale=(1, 1, 0.75))
+    lib.flash(m, f0, f1, period=10, on=6.0, off=0.2)
+
+
+def place(t, f, x, y, heading):
+    """Jump to a new spot at frame f (use at a camera cut)."""
+    h = math.radians(heading)
+    px, py, ph = t.pose(f - 1)
+    bake(t.root, "location", [f - 1, f], [(px, py, 0), (x, y, 0)])
+    bake(t.root, "rotation_euler", [f - 1, f], [(0, 0, ph), (0, 0, h)])
+    t.track[f - 1] = (px, py, ph); t.track[f] = (x, y, h)
+    t.last = (x, y, h)
+
+
+def burst(center, f0, n=14, col=(0.4, 0.25, 0.12), r=0.12, spread=1.6, height=1.4, dur=16, seed=1, name="blob"):
+    """Little blobs thrown up from a point (mud splashes, sand)."""
+    rnd = random.Random(seed)
+    m = P(name, col, rough=0.7, spec=0.2)
+    for i in range(n):
+        o = sphere(name, r * rnd.uniform(0.6, 1.3), center, m, segs=10, rings=6)
+        a = rnd.uniform(0, 2 * math.pi); d = rnd.uniform(0.4, 1.0) * spread; h = rnd.uniform(0.5, 1.0) * height
+        fs = f0 + rnd.randint(0, 5)
+        frames = list(range(fs, fs + dur + 1)); L = []
+        for f in frames:
+            u = (f - fs) / dur
+            L.append((center[0] + math.cos(a) * d * u, center[1] + math.sin(a) * d * u, center[2] + 4 * h * u * (1 - u)))
+        bake(o, "location", frames, L)
+        lib.keys(o, "scale", [(fs - 1, (0, 0, 0)), (fs, (1, 1, 1)), (fs + dur - 2, (1, 1, 1)), (fs + dur, (0, 0, 0))])
+
+
+def ball(r=0.42):
+    root = empty("ball")
+    sphere("ballb", r, (0, 0, 0), P("ball_y", (1.0, 0.8, 0.05)), root, segs=24, rings=14)
+    lib.torus("band", r * 0.98, r * 0.16, (0, 0, 0), P("ball_b", (0.1, 0.4, 1.0)), root)
+    lib.torus("band2", r * 0.98, r * 0.16, (0, 0, 0), P("ball_r", (0.95, 0.1, 0.1)), root, rot=(0, R90, 0))
+    root.location.z = r
+    root["r"] = r
+    return root
+
+
+def roll(b, pts, hop=0.0):
+    """pts: (frame, x, y) list; the ball rolls between them (slows down at the end of each leg)."""
+    r = b["r"]; ang = 0.0
+    for (f0, x0, y0), (f1, x1, y1) in zip(pts, pts[1:]):
+        frames = list(range(f0, f1 + 1)); L, R = [], []
+        d = math.hypot(x1 - x0, y1 - y0); th = math.atan2(y1 - y0, x1 - x0)
+        for f in frames:
+            u = (f - f0) / max(1, f1 - f0); e = 1 - (1 - u) ** 2
+            z = r + hop * abs(math.sin(u * math.pi * 3)) * (1 - u)
+            L.append((x0 + (x1 - x0) * e, y0 + (y1 - y0) * e, z))
+            R.append((-math.sin(th) * (ang + d * e / r), math.cos(th) * (ang + d * e / r), 0))
+        ang += d / r
+        bake(b, "location", frames, L); bake(b, "rotation_euler", frames, R)

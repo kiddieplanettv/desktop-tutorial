@@ -51,7 +51,7 @@ H, W = hi.z, hi.y - lo.y
 print("SIZE", [round(x, 3) for x in (hi - lo)], "faces", len(me.polygons))
 
 # ---- find the wheels: clusters of the points that touch the ground
-band = [c for c in co if c.z < 0.012 * length]
+band = [c for c in co if c.z < float(opt.get("band", 0.012)) * length]
 xs = sorted(c.x for c in band)
 groups = [[xs[0]]]
 for x in xs[1:]:
@@ -85,6 +85,15 @@ for gi, g in enumerate(groups):
         pad = max(0.02 * length, (yb - ya) * 0.2)
         ya, yb = (max(0.0, ya - pad), yb + pad) if sd > 0 else (ya - pad, min(0.0, yb + pad))
         wheels.append(dict(x=cx, r=r, y0=ya, y1=yb))
+for w in wheels:
+    w["z"] = w["r"]
+if "wheels" in opt:                      # manual axles: x:r:z,...  (side extent taken from the detected wheels)
+    yp = [w for w in wheels if w["y0"] >= 0][0]; yn = [w for w in wheels if w["y1"] <= 0][0]
+    wheels = []
+    for it in opt["wheels"].split(","):
+        x_, r_, z_ = [float(v) for v in it.split(":")]
+        for src in (yp, yn):
+            wheels.append(dict(x=x_, r=r_, z=z_, y0=src["y0"], y1=src["y1"]))
 print("WHEELS", [(round(w["x"], 2), round(w["r"], 3), round(w["y0"], 2), round(w["y1"], 2)) for w in wheels])
 
 # ---- cut each wheel out into its own object
@@ -96,7 +105,7 @@ for wi, w in enumerate(wheels):
     for f in bm.faces:
         if tag[f.index] >= 0:
             continue
-        if all((v.co.x - w["x"]) ** 2 + (v.co.z - w["r"]) ** 2 < rr and w["y0"] - 0.01 <= v.co.y <= w["y1"] + 0.01 for v in f.verts):
+        if all((v.co.x - w["x"]) ** 2 + (v.co.z - w["z"]) ** 2 < rr and w["y0"] - 0.01 <= v.co.y <= w["y1"] + 0.01 for v in f.verts):
             tag[f.index] = wi
 bm.free()
 mat = me.materials[0]
@@ -113,7 +122,7 @@ for wi, w in enumerate(wheels):
     before = set(bpy.data.objects)
     bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.separate(type="SELECTED"); bpy.ops.object.mode_set(mode="OBJECT")
     new = (set(bpy.data.objects) - before).pop()
-    c = Vector((w["x"], (w["y0"] + w["y1"]) / 2, w["r"]))
+    c = Vector((w["x"], (w["y0"] + w["y1"]) / 2, w["z"]))
     new.data.transform(Matrix.Translation(-c)); new.location = c
     new.name = f"{name}_wheel{wi}"
     objs.append(new)
@@ -125,7 +134,7 @@ for wi, w in enumerate(wheels):
             continue
         rr = (w2["r"] * float(opt.get("rcut", 1.03))) ** 2
         for f in bm.faces:
-            if all((v.co.x - w2["x"]) ** 2 + (v.co.z - w2["r"]) ** 2 < rr and w2["y0"] - 0.01 <= v.co.y <= w2["y1"] + 0.01 for v in f.verts):
+            if all((v.co.x - w2["x"]) ** 2 + (v.co.z - w2["z"]) ** 2 < rr and w2["y0"] - 0.01 <= v.co.y <= w2["y1"] + 0.01 for v in f.verts):
                 tag[f.index] = wj
     bm.free()
 ob.name = name + "_body"
