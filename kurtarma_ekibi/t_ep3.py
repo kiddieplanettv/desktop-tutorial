@@ -5,7 +5,7 @@ from t_common import *
 
 N = 2040
 MX, MY = 45.0, -9.0
-s, deck = setup(N, bridge=True, clear=[(24, 60, -24, 12)])
+s, deck = setup(N, bridge=True, clear=[(8, 60, -24, -2)], dirt=[(26, 58, -15.5, -2.0)])
 V = fleet(dict(car=(15, 0, 0)))
 car, crane, flat, tow, dump = V["car"], V["crane"], V["flat"], V["tow"], V["dump"]
 C = Cams()

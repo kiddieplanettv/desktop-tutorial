@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from t_common import *
 
 N = 1800
-s, deck = setup(N, bridge=False, clear=[(-2, 30, -16, 16)])
+s, deck = setup(N, bridge=False, clear=[(-10, 32, -18, -2)], pads=[(-6, 9.4, 2.0, 7.4), (-6, 9.4, -7.4, -2.0)])
 V = fleet()
 car, crane, flat, tow, dump = V["car"], V["crane"], V["flat"], V["tow"], V["dump"]
 C = Cams()

@@ -13,8 +13,10 @@ HY = dict(car=11.0, tow=11.5, dump=13.5, crane=16.0, flat=14.0)
 HCOL = dict(car=T.COL["red"], tow=T.COL["purple"], dump=T.COL["yellow"], crane=T.COL["orange"], flat=T.COL["blue"])
 
 
-def setup(N, bridge=True, clear=()):
-    """clear: (x0, x1, y0, y1) boxes that must stay free of trees (camera positions, work sites)."""
+def setup(N, bridge=True, clear=(), pads=(), dirt=()):
+    """clear: (x0, x1, y0, y1) boxes kept free of scenery (camera positions, work sites).
+    pads / dirt: paved / dirt areas beside the road where the vehicles may drive and park."""
+    import scenery as SC
     lib.DOF_FSTOP = 16
     s = lib.reset(N, res=(640, 360) if LO else (1280, 720), samples=3 if LO else 6)
     lib.world(top=(0.1, 0.45, 1.0), horizon=(0.7, 0.9, 1.0), light=0.75)
@@ -23,19 +25,38 @@ def setup(N, bridge=True, clear=()):
     s.eevee.shadow_cascade_size = "1024"
     s.eevee.use_gtao = False
     T.world(RX, road_w=4.6)
+    for q in pads:
+        T.pad(*q)
+    for q in dirt:
+        T.pad(*q, kind="dirt")
+    SC.countryside(N)
+    boxes = list(clear) + [(a - 1.5, b + 1.5, c - 1.5, d + 1.5) for a, b, c, d in list(pads) + list(dirt)]
+    boxes += [(-49, -11, 0, 24), (RX - 4.5, RX + 4.5, -200, 200), (-200, 200, -3.6, 3.6)]
+
+    def free(x, y, m=0.0):
+        if any(a - m <= x <= b + m and c - m <= y <= d + m for a, b, c, d in boxes):
+            return False
+        return all((x - fx) ** 2 + (y - fy) ** 2 > (fr + m) ** 2 for fx, fy, fr in SC.FEATURES)
+
     r = random.Random(7)
     k = 0
-    for i in range(150):
-        x = r.uniform(-70, 122); y = r.choice((-1, 1)) * r.uniform(9, 30)
-        if -50 < x < -10 and y > 0:
-            continue
-        if abs(x - RX) < 4.5:
-            continue
-        if y < 0 and y > -17:
-            continue
-        if any(a <= x <= b and c <= y <= d for a, b, c, d in clear):
+    for i in range(170):
+        x = r.uniform(-75, 125); y = r.choice((-1, 1)) * r.uniform(9, 30)
+        if -17 < y < 0 or not free(x, y, 1.6):
             continue
         T.tree(x, y, r.uniform(1.0, 1.5), k); k += 1
+    r = random.Random(11)
+    for i in range(820):
+        x = r.uniform(-75, 125); y = r.uniform(-22, 24)
+        if not free(x, y, 0.3):
+            continue
+        kind = r.random()
+        if kind < 0.8:
+            SC.flower(x, y, i)
+        elif kind < 0.92:
+            SC.bush(x, y, r.uniform(0.7, 1.1)) if free(x, y, 1.2) and not -17 < y < 0 else SC.flower(x, y, i)
+        else:
+            SC.rock(x, y, r.uniform(0.6, 1.1))
     for n, x in HX.items():
         T.hangar(x, 9.0, HCOL[n], w=5.6, d=12.5, h=5.6)
         lib.box("apron", (4.6, 9.4, 0.06), (x, 4.5, 0.0), lib.mat("road", (0.22, 0.22, 0.26)), bevel=0.02)

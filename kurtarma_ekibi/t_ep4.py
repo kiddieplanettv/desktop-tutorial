@@ -5,7 +5,7 @@ from t_common import *
 
 N = 2040
 HXP = 74.0
-s, deck = setup(N, bridge=True, clear=[(52, 100, -22, 16)])
+s, deck = setup(N, bridge=True, clear=[(40, 100, -22, -2), (70, 80, 4, 12), (55, 62, 9, 15)], pads=[(52, 71, -7.4, -2.0), (55, 85, 2.0, 7.8)])
 V = fleet(dict(flat=(44, 0, 0)))
 car, crane, flat, tow, dump = V["car"], V["crane"], V["flat"], V["tow"], V["dump"]
 C = Cams()
@@ -83,7 +83,7 @@ sfx(TA, "ratchet", dur=1.8); sfx(TA + 32, "whoosh"); sfx(TA + 46, "crackle", dur
 p1 = T.go(dump, TE + 8, [(72.9, 0)], speed=2.4, reverse=True)
 p2 = T.go(dump, p1 + 8, [(78.2, 0)], speed=2.6)
 p3 = p2
-p4 = T.go(dump, p3 + 8, [(84.0, 0), (88.5, -1.0), (91.0, -4.6)], speed=3.6)
+p4 = T.go(dump, p3 + 8, [(86.0, 0), (100, 0), (126, 0)], speed=5.0)
 lib.keys(pile, "scale", [(TA + 30, (0.001, 0.001, 0.001)), (TA + 92, (1.35, 1.5, 0.95)), (TE + 30, (1.35, 1.5, 0.95)), (p1, (1.55, 1.8, 0.4)),
                          (p2, (2.0, 2.4, 0.12))])
 sfx(TE + 8, "beep_reverse", dur=2.0); sfx(TE + 40, "thud"); sfx(p1 + 30, "thud"); sfx(p2 + 4, "sparkle")

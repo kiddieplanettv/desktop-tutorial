@@ -161,8 +161,30 @@ def crane_gear(t, px, dz, boom=8.2, col=None):
     return t
 
 
+HUBS = dict(car=(1.0, 0.74, 0.02), tow=(0.96, 0.96, 0.96), dump=(0.96, 0.96, 0.96), crane=(0.93, 0.07, 0.07), flat=(1.0, 0.74, 0.02))
+
+
+def toy_wheel(t, loc, r, w, hub):
+    """Clean toy wheel whose turning is easy to see: chunky tread blocks and five bolts on the hub."""
+    wh = empty(t.name + "_wheel", loc, t.root)
+    tire = P("tire", (0.045, 0.045, 0.05), rough=0.75, spec=0.2)
+    cyl("tire", r * 0.93, w, (0, 0, 0), tire, wh, rot=(R90, 0, 0), bevel=r * 0.16, verts=28)
+    n = 9
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        box("lug", (r * 0.34, w * 0.98, r * 0.16), (math.cos(a) * r * 0.93, 0, math.sin(a) * r * 0.93), tire, wh, bevel=0.03, rot=(0, -a + R90, 0), segs=2)
+    cyl("hub", r * 0.56, w + 0.06, (0, 0, 0), P("hub_" + t.name, hub), wh, rot=(R90, 0, 0), bevel=0.04, verts=24)
+    cyl("cap", r * 0.17, w + 0.14, (0, 0, 0), P("cap", COL["gray"]), wh, rot=(R90, 0, 0), bevel=0.03, verts=12)
+    for k in range(5):
+        a = 2 * math.pi * k / 5
+        cyl("bolt", r * 0.075, w + 0.11, (math.cos(a) * r * 0.36, 0, math.sin(a) * r * 0.36), P("cap", COL["gray"]), wh, rot=(R90, 0, 0), verts=8)
+    t.wheels.append(wh)
+    return wh
+
+
 def load_toy(model, name=None, loc=(0, 0), heading=0.0):
-    """A Meshy-designed vehicle prepared by meshy_vehicle.py (toys3d/<model>.blend): body + turning wheels."""
+    """A Meshy-designed vehicle prepared by meshy_vehicle.py (toys3d/<model>.blend). The body is the Meshy model;
+    its wheels are replaced by clean turning toy wheels of the same size, with a dark axle block behind them."""
     import os, json
     d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "toys3d")
     t = Toy(name or model, loc, heading)
@@ -171,13 +193,21 @@ def load_toy(model, name=None, loc=(0, 0), heading=0.0):
     col = dst.collections[0]
     bpy.context.scene.collection.children.link(col)
     meta = json.load(open(os.path.join(d, model + ".json")))
-    for o in col.objects:
+    ws = []
+    for o in list(col.objects):
         if "_wheel" in o.name:
-            o.parent = t.root
-            t.wheels.append(o)
+            ys = [v.co.y for v in o.data.vertices]
+            m = min(meta["wheels"], key=lambda w: abs(w["x"] - o.location.x))
+            ws.append((o.location.x, o.location.y, o.location.z, m["r"], max(ys) - min(ys)))
+            bpy.data.objects.remove(o)
         else:
             o.parent = t.body
-    t.r = sum(w["r"] for w in meta["wheels"]) / max(1, len(meta["wheels"]))
+    dark = P("axle", (0.1, 0.1, 0.12), rough=0.8, spec=0.1)
+    for x, y, z, r, w in ws:
+        toy_wheel(t, (x, y, z), r * 1.04, min(w, r * 1.1), HUBS.get(model, COL["white"]))
+        if y > 0:
+            cyl("axle", r * 0.8, 2 * y, (x, 0, z), dark, t.body, rot=(R90, 0, 0), verts=20)
+    t.r = sum(w[3] for w in ws) / max(1, len(ws)) * 1.04
     t.meta = meta
     return t
 
@@ -371,6 +401,17 @@ def hangar(x, y, col, w=4.2, d=6.0, h=3.4):
     return root
 
 
+def pad(x0, x1, y0, y1, kind="road"):
+    """A paved (or dirt) area beside the road where vehicles may drive and park."""
+    if kind == "road":
+        top = mat("road", (0.22, 0.22, 0.26), rough=0.7, spec=0.2); edge = P("cream", COL["cream"], rough=0.6)
+    else:
+        top = P("dirt", (0.86, 0.68, 0.42), rough=0.9, spec=0.05); edge = P("dirt2", (0.72, 0.52, 0.3), rough=0.9, spec=0.05)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    box("road_pad_edge", (x1 - x0 + 0.6, y1 - y0 + 0.6, 0.05), (cx, cy, -0.005), edge, bevel=0.02)
+    box("road_pad", (x1 - x0, y1 - y0, 0.05), (cx, cy, 0.006), top, bevel=0.02)
+
+
 def world(river_x=12.0, river_w=4.8, road_w=4.6):
     """Green toy land: a road along X, a river along Y with a missing bridge, hangars to the west."""
     g = mat("ground", (0.3, 0.72, 0.2), rough=0.85, spec=0.1)
@@ -498,7 +539,7 @@ def split(ob, name, test, origin, parent):
 
 def dump_gear(t):
     """Make the dump truck's bucket tip around its rear hinge; a sand load can lie in it."""
-    body = next(o for o in t.body.children if o.type == "MESH")
+    body = next(o for o in t.body.children if o.type == "MESH" and "_body" in o.name)
     t.bucket = split(body, t.name + "_bucket", lambda c: (c.z > 1.5 and c.x < 1.02) or (c.z > 3.33 and c.x < 2.15), (-2.1, 0, 1.45), t.body)
     t.sand = sphere(t.name + "_sand", 1.0, (1.1, 0, 0.95), P("sandpile", (0.98, 0.8, 0.42), rough=0.85, spec=0.1), t.bucket, scale=(1.75, 1.0, 0.75), segs=32, rings=16)
     t.sand.scale = (0.001, 0.001, 0.001)
