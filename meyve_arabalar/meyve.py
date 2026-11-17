@@ -673,6 +673,10 @@ def area(x0, seed, hide=None):
     for i in range(26):
         dx = rnd.uniform(-7, 7)
         flower(x0 + dx, rnd.uniform(-6.8, -4.8), cols[i % 5], rnd.uniform(0.9, 1.25))
+    for i in range(46):
+        flower(x0 + rnd.uniform(-6.5, 6.5), rnd.uniform(-10.5, -7.0), cols[i % 5], rnd.uniform(0.9, 1.3))
+    for i in range(5):
+        small_mushroom(x0 + rnd.uniform(-5, 5), rnd.uniform(-9.5, -7), cols[(i + 2) % 5], rnd.uniform(1.0, 1.6))
     for dx in (-5.2, 5.0, -8.0, 8.2):
         bush(x0 + dx + rnd.uniform(-0.5, 0.5), rnd.uniform(-6.6, -5.6), rnd.uniform(0.55, 0.8), seed + int(dx * 3))
     for i in range(4):
@@ -784,9 +788,9 @@ def found(car, f, x0, s):
     """Shared ending of a round.  The friend stands on side s of the spot; the truck drives in from the other side,
     they turn towards each other (cargo beds pointing outwards), dance, and fruit jumps from bed to bed."""
     fx, fy = x0 + s * 1.9, -2.0
-    car.move(f + 2, f + 16, fx, fy, car.rz + (-90 - 40 * s - car.rz))
+    car.move(f + 2, f + 16, fx, fy, car.rz + ((-90 - 32 * s) - car.rz + 180) % 360 - 180)
     truck.place(f, x0 - s * 10.5, -2.2, 0 if s > 0 else 180)
-    truck.move(f + 2, f + 34, x0 - s * 2.0, -2.0, -50 if s > 0 else 230)
+    truck.move(f + 2, f + 34, x0 - s * 2.0, -2.0, -58 if s > 0 else 238)
     truck.squash(f + 36); truck.mouth(f + 30, True); truck.look(f + 30, -s * 0.6, dur=2)
     car.look(f + 26, s * 0.6, dur=6)
     car.groove(f + 16, f + 36, 1.0)
@@ -800,7 +804,10 @@ def found(car, f, x0, s):
 
 
 def two_shot(b, x0, s, n):
-    shot(b, b + n, (x0 + s * 1.6, -9.6, 1.5), (x0 + s * 1.7, -2.0, 2.4), (x0, -15.2, 2.3), (x0, -1.6, 3.0), lens=32)
+    """Starts on the friend alone, pulls back and up in time for the truck, then drifts in slowly."""
+    shot(b, b + n, (x0 + s * 1.6, -9.6, 1.5), (x0 + s * 1.7, -2.0, 2.4), (x0, -13.2, 3.8), (x0, -1.6, 1.9), lens=32)
+    key(cam, "location", b + 16, (x0 + s * 1.6, -9.8, 1.6)); key(aim, "location", b + 16, (x0 + s * 1.7, -2.0, 2.3))
+    key(cam, "location", b + 46, (x0, -14.4, 4.2)); key(aim, "location", b + 46, (x0, -1.6, 1.9))
 
 
 def round_jump(f0, kind, x0, seed, s, hide):
@@ -877,7 +884,7 @@ for i, (c, (dx, dy, rz)) in enumerate(zip(order, spots)):
     c.dance(F0, N - 30, spin=False, phase=i)
     c.blink(F0 + 40 + i * 7); c.blink(F0 + 120 + i * 5)
     c.hop(N - 26, 1.0, 14, 1)
-shot(F0, N, (XF, -17.5, 5.2), (XF, -0.5, 2.2), (XF, -14.5, 4.4), (XF, -0.5, 2.3), lens=32)
+shot(F0, N, (XF, -15.5, 9.0), (XF, 0.0, 1.6), (XF, -13.2, 7.6), (XF, 0.0, 1.6), lens=32)
 confetti((XF, -1.0, 0), F0 + 6, n=90, seed=5, spread=6.0, top=10.5)
 confetti((XF, -1.0, 0), F0 + 96, n=90, seed=8, spread=6.0, top=10.5)
 for j, ff in enumerate(range(F0 + 12, N - 20, 36)):
@@ -886,18 +893,29 @@ f = N
 
 # --- nothing may ever go through anything else: check the cars against each other on every frame
 def footprints():
+    def rect(c):
+        m = c.root.matrix_world; L, W = c.sp["L"], c.sp["W"]
+        return [(m @ Vector(p)).xy for p in ((L / 2, W / 2, 0), (L / 2, -W / 2, 0), (-c.reach, -W / 2, 0), (-c.reach, W / 2, 0))]
+
+    def apart(A, B):
+        for P in (A, B):
+            for i in range(4):
+                e = P[(i + 1) % 4] - P[i]; n = Vector((-e.y, e.x)).normalized()
+                a = [p.dot(n) for p in A]; b = [p.dot(n) for p in B]
+                if max(a) < min(b) or max(b) < min(a):
+                    return True
+        return False
     bad = 0
     for fr in range(0, N, 2):
         S.frame_set(fr)
-        P = [(c.kind, c.root.matrix_world.translation.copy(), max(c.sp["L"] / 2, c.reach)) for c in cars]
-        for i in range(len(P)):
-            for j in range(i + 1, len(P)):
-                d = (P[i][1].xy - P[j][1].xy).length
-                if d < 2.0:
+        Rs = [(c.kind, rect(c)) for c in cars]
+        for i in range(len(Rs)):
+            for j in range(i + 1, len(Rs)):
+                if not apart(Rs[i][1], Rs[j][1]):
                     bad += 1
-                    if bad < 12:
-                        print("TOO CLOSE", fr, P[i][0], P[j][0], round(d, 2))
-    print("CLOSE PAIRS", bad)
+                    if bad < 15:
+                        print("OVERLAP", fr, Rs[i][0], Rs[j][0])
+    print("OVERLAPS", bad)
 
 
 if "--check" in sys.argv:
