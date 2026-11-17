@@ -135,6 +135,47 @@ SPEC = dict(
 )
 
 
+def mini(kind, parent=None, loc=(0, 0, 0), s=1.0, seed=0):
+    """A little fruit for the cargo beds."""
+    rnd = random.Random(seed); e = empty("mini_" + kind, loc, parent)
+    lf = mat("leaf", C["leaf"], rough=0.5)
+    if kind == "cilek":
+        sphere("m", 0.3 * s, mat("cilek_body", C["red"]), e, scale=(1, 1, 1.12), u=16, v=10)
+        for j in range(5):
+            cyl("l", 0.07 * s, 0.26 * s, lf, e, (math.cos(j * 1.257) * 0.1 * s, math.sin(j * 1.257) * 0.1 * s, 0.31 * s), rot=(0, R(70), j * 1.257), r2=0.0, seg=5)
+    elif kind == "portakal":
+        sphere("m", 0.31 * s, mat("portakal_body", C["orange"]), e, u=16, v=10)
+        cyl("l", 0.04 * s, 0.1 * s, lf, e, (0, 0, 0.32 * s), seg=6)
+    elif kind == "muz":
+        for a in (-0.5, 0, 0.5):
+            sphere("m", 0.3 * s, mat("muz_body", C["yellow"]), e, (0, a * 0.24 * s, 0), scale=(1.5, 0.42, 0.42), rot=(0, 0.15, a * 0.5), u=14, v=8)
+        cyl("l", 0.05 * s, 0.14 * s, mat("stem", C["stem"]), e, (-0.42 * s, 0, 0.05 * s), rot=(0, R(60), 0), seg=6)
+    elif kind == "ananas":
+        sphere("m", 0.28 * s, mat("ananas_body", C["gold"]), e, scale=(1, 1, 1.3), u=14, v=10)
+        for j in range(5):
+            cyl("l", 0.07 * s, 0.34 * s, lf, e, (0, 0, 0.42 * s), rot=(0, 0.45, j * 1.257), r2=0.0, seg=5)
+    elif kind == "uzum":
+        for (x, y, z) in ((0, 0, 0.12), (0.17, 0, -0.08), (-0.17, 0, -0.08), (0, 0.17, -0.08), (0, -0.17, -0.08), (0, 0, -0.26)):
+            sphere("m", 0.16 * s, mat("uzum_body", C["purple"]), e, (x * s, y * s, z * s), u=12, v=8)
+        cyl("l", 0.03 * s, 0.14 * s, mat("stem", C["stem"]), e, (0, 0, 0.3 * s), seg=6)
+    elif kind == "armut":
+        sphere("m", 0.27 * s, mat("armut_body", C["pear"]), e, (0, 0, -0.05 * s), u=14, v=10)
+        sphere("m2", 0.17 * s, mat("armut_body", C["pear"]), e, (0, 0, 0.2 * s), u=12, v=8)
+        cyl("l", 0.03 * s, 0.14 * s, mat("stem", C["stem"]), e, (0, 0, 0.4 * s), seg=6)
+    e.rotation_euler = (rnd.uniform(-0.25, 0.25), rnd.uniform(-0.25, 0.25), rnd.uniform(0, 6))
+    return e
+
+
+def swap_fruit(kind, src, dst, f, dur=14, h=2.6, seed=0):
+    """A fruit flies in an arc from one cargo bed (world position src) to another (dst)."""
+    o = mini(kind, None, src, seed=seed)
+    key(o, "scale", f - 1, (0, 0, 0)); key(o, "scale", f, (1, 1, 1)); key(o, "location", f, src)
+    mid = ((src[0] + dst[0]) / 2, (src[1] + dst[1]) / 2 - 0.4, max(src[2], dst[2]) + h)
+    key(o, "location", f + dur // 2, mid); key(o, "location", f + dur, dst)
+    r0 = tuple(o.rotation_euler); key(o, "rotation_euler", f, r0); key(o, "rotation_euler", f + dur, (r0[0] + 6.3, r0[1] + 3.0, r0[2]))
+    key(o, "scale", f + dur, (1, 1, 1)); key(o, "scale", f + dur + 1, (0, 0, 0))
+
+
 class Car:
     def __init__(self, kind):
         self.kind = kind; sp = SPEC[kind]; self.sp = sp
@@ -196,6 +237,50 @@ class Car:
                 self.wheels.append(w)
         self.face()
         getattr(self, "deco_" + kind)()
+        self.cargo()
+
+    def cargo(self):
+        """A little wooden bed behind the cab, loaded with this car's own fruit; empty places wait for guests."""
+        k = self.kind; L, W = self.sp["L"], self.sp["W"]
+        bl = 1.7 if k == "cilek" else 0.95 if k == "muz" else 1.2
+        bw = min(W * 0.92, 1.7); x0 = -L / 2 + 0.25; xc = x0 - bl / 2
+        wood = mat("wood", C["wood"], rough=0.6)
+        box("bed", (bl, bw, 0.16), wood, self.b, (xc, 0, 0.62), bevel=0.04)
+        for sd in (1, -1):
+            box("rail", (bl, 0.1, 0.36), wood, self.b, (xc, sd * (bw / 2 - 0.05), 0.83), bevel=0.03)
+        box("tail", (0.1, bw, 0.36), wood, self.b, (x0 - bl + 0.05, 0, 0.83), bevel=0.03)
+        r = 0.34
+        for sd in (1, -1):
+            w = empty(k + "_wheel", (x0 - bl + 0.45, sd * (bw / 2 + 0.02), r), self.b)
+            torus("tyre", r - 0.13, 0.13, mat("tyre", C["tyre"]), w, rot=(R(90), 0, 0), scale=(1, 1, 1.5))
+            cyl("hub", r - 0.14, 0.44, mat(k + "_hub", self.sp["hub"]), w, rot=(R(90), 0, 0))
+            cyl("cap", 0.07, 0.48, mat(k + "_body", self.sp["col"]), w, rot=(R(90), 0, 0))
+            self.wheels.append(w)
+        self.reach = -(x0 - bl) + 0.1                 # how far the bed sticks out behind the middle of the car
+        n = 3 if bl > 1.5 else 2
+        low = [(x0 - bl * (i + 0.5) / n + 0.02, sd * bw * 0.23, 1.0) for i in range(n) for sd in (1, -1)]
+        up = [(x0 - bl * (i + 1.0) / n + 0.05 * i, 0.0, 1.42) for i in range(n - 1)] + [(x0 - bl * 0.3, 0.0, 1.45)]
+        if k == "cilek":
+            self.slots = low + up[:1]; self.free = up[1:] + [(x0 - bl * 0.5, sd * bw * 0.2, 1.8) for sd in (1, -1)] + [(x0 - bl * 0.72, 0, 1.85), (x0 - bl * 0.28, 0, 1.88)]
+        else:
+            self.slots = low; self.free = up
+        self.minis = [mini(k, self.b, p, seed=i + len(k)) for i, p in enumerate(self.slots)]
+
+    def wpos(self, p):
+        """World position of a point given in the car's own coordinates (for a car standing still)."""
+        a = R(self.rz); c, sn = math.cos(a), math.sin(a)
+        return (self.pos[0] + c * p[0] - sn * p[1], self.pos[1] + sn * p[0] + c * p[1], p[2])
+
+    def give(self, other, f, seed=0):
+        """One of my fruits jumps into the other car's bed."""
+        if not self.minis or not other.free:
+            return
+        m = self.minis.pop(0); src = self.slots.pop(0); dst = other.free.pop(0)
+        key(m, "scale", f - 1, (1, 1, 1)); key(m, "scale", f, (0, 0, 0))
+        swap_fruit(self.kind, self.wpos(src), other.wpos(dst), f, seed=seed)
+        g = mini(self.kind, other.b, dst, seed=seed + 3)
+        key(g, "scale", 0, (0, 0, 0)); key(g, "scale", f + 14, (0, 0, 0)); key(g, "scale", f + 15, (1.25, 1.25, 1.25)); key(g, "scale", f + 19, (1, 1, 1))
+        self.free.append(src)
 
     def surf(self, th, lat, out=0.0):
         """Point on the body: th = angle from the nose up to the roof (deg), lat = sideways angle (deg)."""
@@ -272,27 +357,6 @@ class Car:
         for i in range(7):
             self.leaf(top + Vector((0, 0, -0.02)), i * 2 * math.pi / 7 + 0.2, 1.6, size=0.85)
         self.stem(top, 0.34, 0.07, m="leaf")
-        # the truck part: a little wooden bed with strawberries
-        L, W = self.sp["L"], self.sp["W"]
-        wood = mat("wood", C["wood"], rough=0.6)
-        box("bed", (1.7, W * 0.92, 0.16), wood, self.b, (-L / 2 - 0.55, 0, 0.62), bevel=0.04)
-        for sd in (1, -1):
-            box("rail", (1.7, 0.1, 0.42), wood, self.b, (-L / 2 - 0.55, sd * (W * 0.46 - 0.05), 0.86), bevel=0.03)
-        box("tail", (0.1, W * 0.92, 0.42), wood, self.b, (-L / 2 - 1.36, 0, 0.86), bevel=0.03)
-        r = 0.36
-        for sd in (1, -1):
-            w = empty("cilek_wheel", (-L / 2 - 0.85, sd * (W / 2 - 0.12), r), self.b)
-            torus("tyre", r - 0.13, 0.13, mat("tyre", C["tyre"]), w, rot=(R(90), 0, 0), scale=(1, 1, 1.5))
-            cyl("hub", r - 0.14, 0.44, mat("cilek_hub", C["cream"]), w, rot=(R(90), 0, 0))
-            cyl("cap", 0.07, 0.48, mat("cilek_body", C["red"]), w, rot=(R(90), 0, 0))
-            self.wheels.append(w)
-        rnd = random.Random(4)
-        for i, (x, y) in enumerate([(-0.2, -0.45), (-0.25, 0.42), (-0.85, 0.0), (-0.75, -0.55), (-0.8, 0.55), (-0.5, 0.05)]):
-            e = empty("mini", (-L / 2 - 0.25 + x, y, 0.98 + (0.25 if i == 5 else 0)), self.b)
-            sphere("s", 0.3, mat("cilek_body", C["red"]), e, scale=(1, 1, 1.12), u=16, v=10)
-            for j in range(5):
-                self.leaf((0, 0, 0.31), j * 1.257 + i, 1.5, size=0.3, parent=e)
-            e.rotation_euler = (rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3), rnd.uniform(0, 3))
 
     def deco_portakal(self):
         self.seeds(170, (1.0, 0.56, 0.10), size=0.03, skip=self._clear_face)
@@ -404,7 +468,9 @@ class Car:
             last = spin and k == nb - 1
             key(d, "scale", f, (1.1, 1.1, 0.84)); key(d, "location", f, (0, 0, 0))
             key(d, "scale", f + h, (0.94, 0.94, 1.1)); key(d, "location", f + h, (0, 0, 0.55 if last else 0.28))
-            if last:
+            if k == nb - 1 and not spin:
+                key(d, "rotation_euler", f, (0, 0, 0)); key(d, "location", f + h, (0, 0, 0.9))
+            elif last:
                 key(d, "rotation_euler", f, (0, 0, 0)); key(d, "rotation_euler", f + BEAT, (0, 0, 2 * math.pi))
             else:
                 tw = R(16) * (1 if (i // 2) % 2 else -1)
@@ -587,30 +653,30 @@ def area(x0, seed, hide=None):
                scale=(rnd.uniform(14, 20), 10, rnd.uniform(7, 9) + i * 2.5), u=32, v=16)
         sphere("hill", 1, mat("hill%d" % i, G["hill"]), loc=(hx + rnd.choice((-1, 1)) * rnd.uniform(18, 24), hy + 3, -3 - i),
                scale=(rnd.uniform(12, 16), 10, rnd.uniform(5, 7) + i * 2.5), u=32, v=16)
-    box("road", (40, 5.2, 0.04), mat("path", G["path"], rough=0.9), loc=(x0, -0.6, 0.0))
+    box("road", (44, 6.6, 0.04), mat("path", G["path"], rough=0.9), loc=(x0, -1.0, 0.0))
     for sd in (1, -1):
-        box("edge", (40, 0.18, 0.1), mat("edge", (1.0, 1.0, 1.0), rough=0.9), loc=(x0, -0.6 + sd * 2.6, 0.0))
+        box("edge", (40, 0.18, 0.1), mat("edge", (1.0, 1.0, 1.0), rough=0.9), loc=(x0, -1.0 + sd * 3.3, 0.0))
     spots = [(-5.2, 6.5), (5.6, 7.5), (-7.5, 11), (7.8, 12.5), (0.5, 14), (-3.5, 17), (4, 18)]
     for i, (dx, dy) in enumerate(spots):
         tree(x0 + dx + rnd.uniform(-0.6, 0.6), dy, rnd.uniform(0.9, 1.4), seed + i, i % 2)
     for i in range(9):
         dx = rnd.uniform(-9, 9); dy = rnd.uniform(3.4, 9)
-        if abs(dx) < 2.6 and dy < 6:
+        if abs(dx) < 3.2 and dy < 7:
             continue
         bush(x0 + dx, dy, rnd.uniform(0.5, 0.9), seed + i)
     cols = [(1, 0.15, 0.5), (1, 1, 1), (0.55, 0.25, 1.0), (1.0, 0.5, 0.05), (1.0, 0.1, 0.15)]
     for i in range(60):
-        dx = rnd.uniform(-10, 10); dy = rnd.choice((rnd.uniform(-6.5, -3.6), rnd.uniform(2.4, 8)))
+        dx = rnd.uniform(-10, 10); dy = rnd.choice((rnd.uniform(-7.2, -4.8), rnd.uniform(2.8, 8)))
         if hide and abs(dx - hide[0]) < 2.6 and abs(dy - hide[1]) < 2.2:
             continue
         flower(x0 + dx, dy, cols[i % 5], rnd.uniform(0.8, 1.3))
     for i in range(26):
         dx = rnd.uniform(-7, 7)
-        flower(x0 + dx, rnd.uniform(-6.0, -4.0), cols[i % 5], rnd.uniform(0.9, 1.25))
+        flower(x0 + dx, rnd.uniform(-6.8, -4.8), cols[i % 5], rnd.uniform(0.9, 1.25))
     for dx in (-5.2, 5.0, -8.0, 8.2):
-        bush(x0 + dx + rnd.uniform(-0.5, 0.5), rnd.uniform(-5.6, -4.6), rnd.uniform(0.55, 0.8), seed + int(dx * 3))
+        bush(x0 + dx + rnd.uniform(-0.5, 0.5), rnd.uniform(-6.6, -5.6), rnd.uniform(0.55, 0.8), seed + int(dx * 3))
     for i in range(4):
-        fence(x0 - 9.5 + i * 5.4 + rnd.uniform(0, 1), 2.5 if i % 2 else 2.7, 3)
+        fence(x0 - 9.5 + i * 5.4 + rnd.uniform(0, 1), 3.1 if i % 2 else 3.3, 3)
     for i in range(5):
         cloud(x0 + rnd.uniform(-16, 16), 42 + i * 2, rnd.uniform(15, 30), rnd.uniform(1.6, 3.0))
     rainbow(x0 + rnd.uniform(-2, 2), 30, -1.0, 1.0)
@@ -619,12 +685,12 @@ def area(x0, seed, hide=None):
     balloons(x0 + rnd.choice((-7.5, 7.5)), 14, 8.5, seed + 3)
     mc = [(1.0, 0.15, 0.2), (0.6, 0.3, 0.95), (0.1, 0.6, 1.0), (1.0, 0.55, 0.1), (1.0, 0.35, 0.7)]
     for i in range(12):
-        dx = rnd.uniform(-8, 8); dy = rnd.choice((rnd.uniform(-5.6, -3.5), rnd.uniform(2.3, 3.2)))
+        dx = rnd.uniform(-8, 8); dy = rnd.choice((rnd.uniform(-6.4, -4.8), rnd.uniform(2.7, 3.4)))
         if hide and abs(dx - hide[0]) < 2.6 and dy > 0:
             continue
         small_mushroom(x0 + dx, dy, mc[i % 5], rnd.uniform(0.9, 1.5))
     for i in range(3):
-        sphere("st", rnd.uniform(0.12, 0.22), mat("rock", G["rock"]), loc=(x0 + rnd.uniform(-8, 8), rnd.choice((-3.6, 2.3)), 0.05), scale=(1, 0.8, 0.6), u=8, v=6)
+        sphere("st", rnd.uniform(0.12, 0.22), mat("rock", G["rock"]), loc=(x0 + rnd.uniform(-8, 8), rnd.choice((-4.6, 2.6)), 0.05), scale=(1, 0.8, 0.6), u=8, v=6)
 
 
 # ------------------------------------------------------------------ effects, camera
@@ -714,78 +780,137 @@ def seeker(f0, f1):
     truck.groove(f0, f1 - 1, 1.0)
 
 
-def found(car, f, x0, hx, side=1):
-    """Shared ending of a round: the friend is out at (x0 + side*2.4, -0.9); the truck drives in and both hop."""
-    truck.place(f, x0 - side * 9.5, -1.4, 0 if side > 0 else 180)
-    truck.move(f + 2, f + 34, x0 - side * 1.6, -0.7, -90 + side * 22)
-    truck.squash(f + 36); truck.mouth(f + 30, True); truck.look(f + 30, -side * 0.6, dur=2)
-    car.look(f + 26, side * 0.8 * (-1), dur=6)
-    car.groove(f + 2, f + 36, 1.0)
+def found(car, f, x0, s):
+    """Shared ending of a round.  The friend stands on side s of the spot; the truck drives in from the other side,
+    they turn towards each other (cargo beds pointing outwards), dance, and fruit jumps from bed to bed."""
+    fx, fy = x0 + s * 1.9, -2.0
+    car.move(f + 2, f + 16, fx, fy, car.rz + (-90 - 40 * s - car.rz))
+    truck.place(f, x0 - s * 10.5, -2.2, 0 if s > 0 else 180)
+    truck.move(f + 2, f + 34, x0 - s * 2.0, -2.0, -50 if s > 0 else 230)
+    truck.squash(f + 36); truck.mouth(f + 30, True); truck.look(f + 30, -s * 0.6, dur=2)
+    car.look(f + 26, s * 0.6, dur=6)
+    car.groove(f + 16, f + 36, 1.0)
     e = (f + 90) // BEAT * BEAT
-    truck.dance(f + 38, e, phase=0); car.dance(f + 38, e, phase=1)
+    spin = car.reach + 1.3 < 3.6 and car.kind != "muz"
+    truck.dance(f + 38, e, spin=False, phase=0); car.dance(f + 38, e, spin=spin, phase=1)
+    truck.give(car, f + 42, seed=int(x0)); car.give(truck, f + 47, seed=int(x0) + 1); car.give(truck, f + 52, seed=int(x0) + 2)
+    stars((x0, -2.6, 3.0), f + 58, n=10, seed=int(x0), spread=2.2, col=(1.0, 0.4, 0.7))
     truck.blink(f + 40); car.blink(f + 46)
     truck.mouth(f + 86, False); truck.look(f + 88, 0)
 
 
-def round_orange(f0):
-    """Behind a big bush: leaves shake, the orange car hops out."""
-    x0 = 40.0; car = Car("portakal"); area(x0, 2, hide=(0, 1.2))
-    hb = bush(x0, 0.9, 2.0, 11); bush(x0 - 2.6, 1.4, 1.2, 12)
-    car.place(0, x0 + 0.2, 3.4, -90, cut=False); car.mouth(0, False)
-    seeker(f0, f0 + 56)
-    a = f0 + 56
-    shot(a, a + 60, (x0 + 0.4, -10.0, 1.5), (x0 + 0.2, 0.5, 2.3), (x0 + 0.6, -8.8, 1.5), (x0 + 0.4, 0.5, 2.3), lens=32)
-    for f in range(a + 6, a + 44, 5):                       # the bush rustles
+def two_shot(b, x0, s, n):
+    shot(b, b + n, (x0 + s * 1.6, -9.6, 1.5), (x0 + s * 1.7, -2.0, 2.4), (x0, -15.2, 2.3), (x0, -1.6, 3.0), lens=32)
+
+
+def round_jump(f0, kind, x0, seed, s, hide):
+    """The friend hides behind something, peeks over the top, then jumps out over it."""
+    car = Car(kind); area(x0, seed, hide=(0, 1.6))
+    hb = hide(x0, 1.6)
+    car.place(0, x0 + 0.2 * s, 4.3, -90, cut=False); car.mouth(0, False)
+    seeker(f0, f0 + 54)
+    a = f0 + 54
+    shot(a, a + 60, (x0 + 0.4 * s, -11.0, 1.5), (x0 + 0.2 * s, 1.0, 2.6), (x0 + 0.6 * s, -9.8, 1.5), (x0 + 0.4 * s, 1.0, 2.6), lens=32)
+    for f in range(a + 6, a + 44, 5):                       # the hiding place shakes
         key(hb, "rotation_euler", f, (0, R(4) * (1 if (f // 5) % 2 else -1), 0)); key(hb, "scale", f, (1.03, 1.0, 0.98) if (f // 5) % 2 else (0.98, 1, 1.03))
     key(hb, "rotation_euler", a + 46, (0, 0, 0)); key(hb, "scale", a + 46, (1, 1, 1))
-    # peek: rises behind the bush, eyes over the top
-    key(car.b, "location", a + 14, (0, 0, 0)); key(car.b, "location", a + 24, (0, 0, 1.75)); car.look(a + 26, -1); car.look(a + 36, 1)
-    car.blink(a + 31); key(car.b, "location", a + 40, (0, 0, 1.75)); key(car.b, "location", a + 46, (0, 0, 0))
+    key(car.b, "location", a + 14, (0, 0, 0)); key(car.b, "location", a + 24, (0, 0, 2.0)); car.look(a + 26, -1); car.look(a + 36, 1)
+    car.blink(a + 31); key(car.b, "location", a + 40, (0, 0, 2.0)); key(car.b, "location", a + 46, (0, 0, 0))
     b = a + 60                                              # jump out
-    shot(b, b + 112, (x0 + 1.2, -8.8, 1.4), (x0 + 1.2, -1.0, 2.5), (x0 + 0.1, -12.2, 1.6), (x0, -1.0, 3.1), lens=32)
+    two_shot(b, x0, s, 114)
+    lx, ly = x0 + 1.8 * s, -2.0
     car.root.keyframe_insert("location", frame=b + 2); car.root.keyframe_insert("rotation_euler", frame=b + 2)
-    car.root.location = (x0 + 1.5, -1.7, 0); car.root.rotation_euler = (0, 0, R(-76)); car.pos = (x0 + 1.5, -1.7)
+    car.root.location = (lx, ly, 0); car.root.rotation_euler = (0, 0, R(-90 - 14 * s)); car.pos = (lx, ly); car.rz = -90 - 14 * s
     car.root.keyframe_insert("location", frame=b + 18); car.root.keyframe_insert("rotation_euler", frame=b + 18)
-    key(car.b, "location", b + 2, (0, 0, 0)); key(car.b, "location", b + 10, (0, 0, 2.6)); key(car.b, "location", b + 18, (0, 0, 0))
+    key(car.b, "location", b + 2, (0, 0, 0)); key(car.b, "location", b + 10, (0, 0, 3.4)); key(car.b, "location", b + 18, (0, 0, 0))
     key(car.b, "rotation_euler", b + 2, (0, 0, 0)); key(car.b, "rotation_euler", b + 10, (0, R(-14), 0)); key(car.b, "rotation_euler", b + 18, (0, 0, 0))
     car.squash(b + 19, 0.2); car.mouth(b + 12, True); car.big_eyes(b + 12, 10); car.look(b + 12, 0)
-    stars((x0 + 1.6, -2.0, 2.2), b + 19, seed=3)
+    stars((lx, ly - 0.3, 2.2), b + 19, seed=seed)
     car.blink(b + 34)
-    found(car, b + 22, x0, 0.9, side=1)
-    return car, b + 112
+    found(car, b + 22, x0, s)
+    return car, b + 114
 
 
-def round_banana(f0):
-    """Behind a haystack: the long banana bus cannot quite hide - its ends stick out."""
-    x0 = 80.0; car = Car("muz"); area(x0, 3, hide=(0, 1.2))
-    hs = haystack(x0, 0.6, 1.0); haystack(x0 + 4.6, 3.2, 0.6)
-    car.place(0, x0 - 0.2, 2.6, 180, cut=False); car.mouth(0, False)
+def round_slide(f0, kind, x0, seed, s, hide):
+    """The friend hides behind something, slides out to peek, hides again, then drives out."""
+    car = Car(kind); area(x0, seed, hide=(0, 1.6))
+    hs = hide(x0, 1.6)
+    h0 = 0 if s > 0 else 180
+    car.place(0, x0 - 0.2 * s, 4.0, h0, cut=False); car.mouth(0, False)
     seeker(f0, f0 + 50)
     a = f0 + 50
-    shot(a, a + 64, (x0 - 0.4, -10.4, 1.5), (x0 - 0.4, 0.5, 2.2), (x0 - 1.0, -9.2, 1.5), (x0 - 1.0, 0.4, 2.1), lens=32)
-    # slides out to the left, peeks with its face, slides back
-    car.move(a + 8, a + 22, x0 - 2.3, 2.6); car.look(a + 24, 0, 0); car.turn(a + 20, a + 28, 235)
-    car.blink(a + 32); car.look(a + 38, -1); car.big_eyes(a + 40, 6)
-    car.turn(a + 48, a + 52, 180); car.move(a + 50, a + 60, x0 - 0.2, 2.6, back=True)
-    b = a + 64
-    shot(b, b + 114, (x0 - 1.4, -9.6, 1.4), (x0 - 1.6, -0.5, 2.5), (x0 - 0.1, -12.6, 1.6), (x0, -1.0, 3.1), lens=32)
-    car.move(b + 2, b + 20, x0 - 3.6, 2.2, 225)
-    car.move(b + 20, b + 40, x0 - 1.7, -1.9, 296)
-    car.squash(b + 42, 0.14); car.mouth(b + 30, True); car.big_eyes(b + 30, 10); car.look(b + 30, 0)
-    stars((x0 - 1.7, -2.3, 2.0), b + 42, seed=7)
+    shot(a, a + 64, (x0 + 0.4 * s, -11.4, 1.5), (x0 + 0.4 * s, 1.0, 2.5), (x0 + 1.0 * s, -10.2, 1.5), (x0 + 1.0 * s, 0.9, 2.4), lens=32)
+    car.move(a + 8, a + 22, x0 + 2.4 * s, 4.0); car.look(a + 24, 0, 0); car.turn(a + 20, a + 28, h0 - 55 * s)
+    car.blink(a + 32); car.look(a + 38, s); car.big_eyes(a + 40, 6)
+    car.turn(a + 48, a + 52, h0); car.move(a + 50, a + 60, x0 - 0.2 * s, 4.0, back=True)
     for f in range(a + 6, a + 26, 5):
         key(hs, "scale", f, (1.03, 1, 0.98) if (f // 5) % 2 else (0.98, 1, 1.03))
     key(hs, "scale", a + 28, (1, 1, 1))
-    found(car, b + 24, x0, 0.6, side=-1)
+    b = a + 64
+    two_shot(b, x0, s, 114)
+    car.move(b + 2, b + 20, x0 + 4.2 * s, 3.2, h0 - 45 * s)
+    car.move(b + 20, b + 40, x0 + 1.9 * s, -2.0, h0 - 112 * s)
+    car.squash(b + 42, 0.14); car.mouth(b + 30, True); car.big_eyes(b + 30, 10); car.look(b + 30, 0)
+    stars((x0 + 1.9 * s, -2.4, 2.0), b + 42, seed=seed)
+    found(car, b + 26, x0, s)
     return car, b + 114
 
 
 f = 96
-c1, f = round_orange(f)
-c2, f = round_banana(f)
+c1, f = round_jump(f, "portakal", 40.0, 2, 1, lambda x, y: bush(x, y, 2.0, 11))
+c2, f = round_slide(f, "muz", 80.0, 3, -1, lambda x, y: haystack(x, y, 1.0))
+c3, f = round_jump(f, "ananas", 120.0, 4, -1, lambda x, y: mushroom(x, y, 1.15))
+c4, f = round_slide(f, "uzum", 160.0, 5, 1, lambda x, y: bush(x, y, 2.0, 21))
+c5, f = round_jump(f, "armut", 200.0, 6, 1, lambda x, y: haystack(x, y, 1.0))
+
+# --- finale: everybody dances together
+F0 = f // BEAT * BEAT
+XF = 240.0
+area(XF, 9)
+cars = [truck, c1, c2, c3, c4, c5]
+spots = [(0.0, -3.0, -90), (-2.9, -2.6, -72), (2.9, -2.6, -108), (-3.1, 2.6, -80), (0.0, 3.0, -90), (3.1, 2.6, -100)]
+order = [truck, c1, c5, c3, c2, c4]
+for i, (c, (dx, dy, rz)) in enumerate(zip(order, spots)):
+    c.place(F0, XF + dx, dy, rz)
+    c.d.rotation_euler = (0, 0, 0); c.d.keyframe_insert("rotation_euler", frame=F0)
+    c.mouth(F0 + 2, True); c.look(F0 + 2, 0, dur=1)
+    c.dance(F0, N - 30, spin=False, phase=i)
+    c.blink(F0 + 40 + i * 7); c.blink(F0 + 120 + i * 5)
+    c.hop(N - 26, 1.0, 14, 1)
+shot(F0, N, (XF, -17.5, 5.2), (XF, -0.5, 2.2), (XF, -14.5, 4.4), (XF, -0.5, 2.3), lens=32)
+confetti((XF, -1.0, 0), F0 + 6, n=90, seed=5, spread=6.0, top=10.5)
+confetti((XF, -1.0, 0), F0 + 96, n=90, seed=8, spread=6.0, top=10.5)
+for j, ff in enumerate(range(F0 + 12, N - 20, 36)):
+    stars((XF + (-2.5, 2.5, 0)[j % 3], -2.0, 4.6), ff, n=10, seed=40 + j, spread=2.4, col=((1.0, 0.85, 0.1), (1.0, 0.4, 0.7), (0.3, 0.8, 1.0))[j % 3])
+f = N
+
+# --- nothing may ever go through anything else: check the cars against each other on every frame
+def footprints():
+    bad = 0
+    for fr in range(0, N, 2):
+        S.frame_set(fr)
+        P = [(c.kind, c.root.matrix_world.translation.copy(), max(c.sp["L"] / 2, c.reach)) for c in cars]
+        for i in range(len(P)):
+            for j in range(i + 1, len(P)):
+                d = (P[i][1].xy - P[j][1].xy).length
+                if d < 2.0:
+                    bad += 1
+                    if bad < 12:
+                        print("TOO CLOSE", fr, P[i][0], P[j][0], round(d, 2))
+    print("CLOSE PAIRS", bad)
+
+
+if "--check" in sys.argv:
+    footprints()
 print("END", f, "of", N)
 os.makedirs(os.path.join(HERE, "build"), exist_ok=True)
-S.render.filepath = "//kareler/f_"
-S.render.use_overwrite = False; S.render.use_placeholder = True
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "build", "meyve.blend"))
+if "--mp4" in sys.argv:                 # the file handed over for rendering: Ctrl+F12 writes the video next to it
+    S.render.image_settings.media_type = "VIDEO"; S.render.image_settings.file_format = "FFMPEG"
+    S.render.ffmpeg.format = "MPEG4"; S.render.ffmpeg.codec = "H264"; S.render.ffmpeg.constant_rate_factor = "HIGH"
+    S.render.filepath = "//Meyve_Arabalar_1dk.mp4"
+else:
+    S.render.filepath = "//kareler/f_"
+    S.render.use_overwrite = False; S.render.use_placeholder = True
+OUTF = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else os.path.join(HERE, "build", "meyve.blend")
+bpy.ops.wm.save_as_mainfile(filepath=OUTF, compress=True)
 print("BUILT")
