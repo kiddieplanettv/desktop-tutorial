@@ -7,8 +7,29 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LO = "--lo" in sys.argv
 MID = "--mid" in sys.argv          # 720x1280 preview
 FPS = 24
-BEAT = 12                           # frames per beat: 120 BPM
-N = 1440
+# ---- the song (Suno, "Meyve Arabalari"): 101 BPM, first beat at 0.225 s, 62.4 s long
+BPM_S = 0.594                       # seconds per beat
+PH = 0.225                          # time of beat 0
+BEAT = BPM_S * FPS                  # frames per beat (14.26)
+N = 1498                            # 62.4 s
+SONG = os.path.join(HERE, "sarki", "Meyve_Arabalari.m4a")
+
+
+def bt(i):
+    """Frame (float) of beat i of the song."""
+    return (PH + i * BPM_S) * FPS
+
+
+def fr(i):
+    return int(round(bt(i)))
+
+
+def beats(f0, f1):
+    """Beat numbers whose whole beat lies between frames f0 and f1."""
+    i = math.ceil((f0 / FPS - PH) / BPM_S - 1e-6)
+    while bt(i + 1) <= f1 + 1e-6:
+        yield i
+        i += 1
 if "--frames" in sys.argv:
     N = int(sys.argv[sys.argv.index("--frames") + 1])
 R = math.radians
@@ -448,36 +469,36 @@ class Car:
             key(b, "scale", a + dur + 1, (1.14, 1.14, 0.8)); key(b, "scale", a + dur + 5, (1, 1, 1))
 
     def groove(self, f0, f1, amp=1.0):
-        """Bob and rock in time with the music (one beat = BEAT frames) - on its own layer, so it adds to everything else."""
-        d = self.d; f = (f0 + BEAT - 1) // BEAT * BEAT; i = f // BEAT
+        """Bob and rock on the beat of the song - on its own layer, so it adds to everything else."""
+        d = self.d; last = f0
         key(d, "scale", f0, (1, 1, 1)); key(d, "rotation_euler", f0, (0, 0, 0)); key(d, "location", f0, (0, 0, 0))
-        while f + BEAT <= f1:
-            sg = 1 if i % 2 else -1
-            key(d, "scale", f, (1 + 0.05 * amp, 1 + 0.05 * amp, 1 - 0.09 * amp)); key(d, "scale", f + BEAT // 2, (1 - 0.03 * amp, 1 - 0.03 * amp, 1 + 0.06 * amp))
-            key(d, "rotation_euler", f, (0, 0, 0)); key(d, "rotation_euler", f + BEAT // 2, (sg * R(6) * amp, 0, 0))
-            f += BEAT; i += 1
-        key(d, "scale", f, (1, 1, 1)); key(d, "rotation_euler", f, (0, 0, 0)); key(d, "location", f, (0, 0, 0))
+        for i in beats(f0, f1):
+            f = bt(i); sg = 1 if i % 2 else -1
+            key(d, "scale", f, (1 + 0.05 * amp, 1 + 0.05 * amp, 1 - 0.09 * amp)); key(d, "scale", f + BEAT / 2, (1 - 0.03 * amp, 1 - 0.03 * amp, 1 + 0.06 * amp))
+            key(d, "rotation_euler", f, (0, 0, 0)); key(d, "rotation_euler", f + BEAT / 2, (sg * R(6) * amp, 0, 0))
+            last = bt(i + 1)
+        key(d, "scale", last, (1, 1, 1)); key(d, "rotation_euler", last, (0, 0, 0)); key(d, "location", last, (0, 0, 0))
 
-    def dance(self, f0, f1, spin=True, phase=0):
-        """Proper dancing: big side-to-side rocking, twisting, little jumps on the beat and a spin at the end."""
-        d = self.d; f = (f0 + BEAT - 1) // BEAT * BEAT; i = f // BEAT + phase
+    def dance(self, f0, f1, spin=True, phase=0, end_jump=True):
+        """Proper dancing on the beat: big side-to-side rocking, twisting, little jumps; the last beat is a spin or a big jump."""
+        d = self.d
         key(d, "scale", f0, (1, 1, 1)); key(d, "rotation_euler", f0, (0, 0, 0)); key(d, "location", f0, (0, 0, 0))
-        nb = (f1 - f) // BEAT; k = 0
-        while f + BEAT <= f1:
-            sg = 1 if i % 2 else -1; h = BEAT // 2
-            last = spin and k == nb - 1
+        bl = list(beats(f0, f1)); last = f0
+        for k, i in enumerate(bl):
+            f = bt(i); j = i + phase; sg = 1 if j % 2 else -1; h = BEAT / 2
+            final = k == len(bl) - 1 and end_jump
             key(d, "scale", f, (1.1, 1.1, 0.84)); key(d, "location", f, (0, 0, 0))
-            key(d, "scale", f + h, (0.94, 0.94, 1.1)); key(d, "location", f + h, (0, 0, 0.55 if last else 0.28))
-            if k == nb - 1 and not spin:
+            key(d, "scale", f + h, (0.94, 0.94, 1.1)); key(d, "location", f + h, (0, 0, 0.28))
+            if final and not spin:
                 key(d, "rotation_euler", f, (0, 0, 0)); key(d, "location", f + h, (0, 0, 0.9))
-            elif last:
-                key(d, "rotation_euler", f, (0, 0, 0)); key(d, "rotation_euler", f + BEAT, (0, 0, 2 * math.pi))
+            elif final:
+                key(d, "rotation_euler", f, (0, 0, 0)); key(d, "location", f + h, (0, 0, 0.55)); key(d, "rotation_euler", f + BEAT, (0, 0, 2 * math.pi))
             else:
-                tw = R(16) * (1 if (i // 2) % 2 else -1)
+                tw = R(16) * (1 if (j // 2) % 2 else -1)
                 key(d, "rotation_euler", f, (0, 0, tw)); key(d, "rotation_euler", f + h, (sg * R(13), 0, tw))
-            f += BEAT; i += 1; k += 1
-        key(d, "scale", f, (1, 1, 1)); key(d, "location", f, (0, 0, 0))
-        d.rotation_euler = (0, 0, 0); d.keyframe_insert("rotation_euler", frame=f + 1)
+            last = bt(i + 1)
+        key(d, "scale", last, (1, 1, 1)); key(d, "location", last, (0, 0, 0))
+        d.rotation_euler = (0, 0, 0); d.keyframe_insert("rotation_euler", frame=last + 1)
 
     def wiggle(self, f0, f1, amp=0.07, per=6):
         b = self.b
@@ -762,134 +783,168 @@ T0 = 0.0
 area(T0, 1)
 tree(T0 - 3.4, 3.6, 1.3, 77, 1); bush(T0 + 3.6, 3.3, 0.9, 5)
 
-# --- intro (0 - 120): the strawberry truck rolls in and starts looking for its friends
-truck.place(0, T0 - 9, -0.6, 0, cut=False)
-truck.move(0, 40, T0 - 0.3, -0.6, -52)
-truck.squash(42); truck.blink(50); truck.mouth(0, False)
-shot(0, 96, (T0 + 0.8, -10.0, 1.5), (T0 - 0.5, 0, 2.0), (T0 + 0.4, -7.6, 1.4), (T0 - 0.1, 0, 1.9), lens=30)
-truck.look(56, 1); truck.turn(52, 60, -30); truck.look(72, -1); truck.turn(68, 78, -95); truck.blink(82)
-truck.look(90, 0); truck.turn(86, 94, -62)
-question((T0 + 0.2, -0.6, 3.5), 54, 94)
-truck.groove(48, 96, 1.0)
+# ---------------------------------------------------------------- timing from the song
+# intro: music 0-2.6 s, "Dut dut! Cilek kamyon geldi" from beat 4, "Arkadaslar nerede? Hadi bulalim!" from beat 9
+# every verse is 16 beats starting on beat 16, 32, 48, 64, 80:
+#   beat +0 "X araba, nerdesin?"   beat +3.4 "Y ardinda misin?"   beat +5 "Ce-ee! Buldum seni!"   beat +10 "Zipla zipla / Salla salla"
+# outro from beat 96: "Meyve arabalar dans ediyor, zipla, salla, don, hey hey hey!"
+
+# --- intro: the strawberry truck rolls in, honks twice, and wonders where its friends are
+truck.place(0, T0 - 10, -0.6, 0, cut=False); truck.mouth(0, False)
+truck.move(2, fr(3.6), T0 - 0.3, -0.6, -52)
+shot(0, fr(9), (T0 + 0.4, -12.5, 2.2), (T0 - 2.0, 0, 2.0), (T0 + 0.6, -9.6, 1.6), (T0 - 0.3, 0, 2.0), lens=30)
+for b_ in (4, 5):                                     # "Dut! Dut!"
+    truck.squash(fr(b_), 0.2)
+truck.mouth(fr(4) - 1, True); truck.blink(fr(5) + 6)
+truck.groove(fr(5) + 2, fr(9), 1.0)
+truck.mouth(fr(8), False)
+shot(fr(9), fr(16), (T0 + 0.4, -8.2, 1.4), (T0, 0, 1.9), (T0 + 0.2, -7.0, 1.4), (T0, 0, 1.9), lens=32)
+question((T0 + 0.2, -0.6, 3.5), fr(9) + 1, fr(16) - 2)
+truck.look(fr(9) + 4, 1); truck.turn(fr(9), fr(10), -30); truck.look(fr(11) + 4, -1); truck.turn(fr(11), fr(12), -95); truck.blink(fr(12) + 4)
+truck.mouth(fr(13), True); truck.look(fr(13) + 2, 0); truck.turn(fr(13), fr(14), -62)
+truck.groove(fr(9), fr(16) - 1, 1.0); truck.hop(fr(14), 0.5, 12, 1)
+truck.mouth(fr(15) + 6, False)
 
 
 def seeker(f0, f1):
-    """Short cut-away: the truck looks around."""
+    """'X araba, nerdesin?' - the truck looks left and right."""
     truck.place(f0, T0, -0.6, -62)
-    truck.look(f0, 0, dur=1)
+    truck.look(f0, 0, dur=1); truck.mouth(f0, False)
     shot(f0, f1, (T0 + 0.4, -7.8, 1.4), (T0, 0, 1.9), (T0 + 0.2, -7.2, 1.4), (T0, 0, 1.9), lens=32)
-    truck.look(f0 + 10, 1); truck.turn(f0 + 6, f0 + 16, -35); truck.look(f0 + 30, -1); truck.turn(f0 + 26, f0 + 38, -92)
-    truck.blink(f0 + 22); question((T0 + 0.2, -0.6, 3.5), f0 + 6, f1 - 2)
-    truck.look(f1 - 6, 0); truck.turn(f1 - 10, f1 - 2, -62)
+    truck.look(f0 + 8, 1); truck.turn(f0 + 4, f0 + 13, -35); truck.look(f0 + 26, -1); truck.turn(f0 + 22, f0 + 32, -92)
+    truck.blink(f0 + 18); question((T0 + 0.2, -0.6, 3.5), f0 + 3, f1 - 1)
     truck.groove(f0, f1 - 1, 1.0)
 
 
-def found(car, f, x0, s):
-    """Shared ending of a round.  The friend stands on side s of the spot; the truck drives in from the other side,
-    they turn towards each other (cargo beds pointing outwards), dance, and fruit jumps from bed to bed."""
-    fx, fy = x0 + s * 1.9, -2.0
-    car.move(f + 2, f + 16, fx, fy, car.rz + ((-90 - 32 * s) - car.rz + 180) % 360 - 180)
-    truck.place(f, x0 - s * 10.5, -2.2, 0 if s > 0 else 180)
-    truck.move(f + 2, f + 34, x0 - s * 2.0, -2.0, -58 if s > 0 else 238)
-    truck.squash(f + 36); truck.mouth(f + 30, True); truck.look(f + 30, -s * 0.6, dur=2)
-    car.look(f + 26, s * 0.6, dur=6)
-    car.groove(f + 16, f + 36, 1.0)
-    e = (f + 90) // BEAT * BEAT
+def found(car, C, D, E, x0, s):
+    """'Buldum seni!': the truck drives in (from the other side) and they face each other with the beds pointing
+    outwards; from D ('Zipla zipla') they dance and fruit jumps from bed to bed; E is the start of the next verse."""
+    truck.place(C + 14, x0 - s * 10.5, -2.2, 0 if s > 0 else 180)
+    truck.mouth(C + 14, True)
+    truck.move(C + 18, D - 12, x0 - s * 2.0, -2.0, -58 if s > 0 else 238)
+    truck.squash(D - 10); truck.look(D - 14, -s * 0.6, dur=2)
+    car.look(D - 20, s * 0.6, dur=6); car.groove(C + 20, D, 1.0)
     spin = car.reach + 1.3 < 3.6 and car.kind != "muz"
-    truck.dance(f + 38, e, spin=False, phase=0); car.dance(f + 38, e, spin=spin, phase=1)
-    truck.give(car, f + 42, seed=int(x0)); car.give(truck, f + 47, seed=int(x0) + 1); car.give(truck, f + 52, seed=int(x0) + 2)
-    stars((x0, -2.6, 3.0), f + 58, n=10, seed=int(x0), spread=2.2, col=(1.0, 0.4, 0.7))
-    truck.blink(f + 40); car.blink(f + 46)
-    truck.mouth(f + 86, False); truck.look(f + 88, 0)
+    truck.dance(D, E - 1, spin=False, phase=0); car.dance(D, E - 1, spin=spin, phase=1)
+    truck.give(car, D + 3, seed=int(x0)); car.give(truck, D + 12, seed=int(x0) + 1); car.give(truck, D + 21, seed=int(x0) + 2)
+    stars((x0, -2.6, 3.0), D + 30, n=10, seed=int(x0), spread=2.2, col=(1.0, 0.4, 0.7))
+    truck.blink(D + 6); car.blink(D + 14)
 
 
-def two_shot(b, x0, s, n):
+def two_shot(b, x0, s, e):
     """Starts on the friend alone, pulls back and up in time for the truck, then drifts in slowly."""
-    shot(b, b + n, (x0 + s * 1.6, -9.6, 1.5), (x0 + s * 1.7, -2.0, 2.4), (x0, -13.2, 3.8), (x0, -1.6, 1.9), lens=32)
-    key(cam, "location", b + 16, (x0 + s * 1.6, -9.8, 1.6)); key(aim, "location", b + 16, (x0 + s * 1.7, -2.0, 2.3))
-    key(cam, "location", b + 46, (x0, -14.4, 4.2)); key(aim, "location", b + 46, (x0, -1.6, 1.9))
+    shot(b, e, (x0 + s * 1.6, -9.6, 1.5), (x0 + s * 1.7, -2.0, 2.4), (x0, -13.2, 3.8), (x0, -1.6, 1.9), lens=32)
+    key(cam, "location", b + 14, (x0 + s * 1.6, -9.8, 1.6)); key(aim, "location", b + 14, (x0 + s * 1.7, -2.0, 2.3))
+    key(cam, "location", b + 44, (x0, -14.4, 4.2)); key(aim, "location", b + 44, (x0, -1.6, 1.9))
 
 
-def round_jump(f0, kind, x0, seed, s, hide):
-    """The friend hides behind something, peeks over the top, then jumps out over it."""
+def verse(v):
+    """Frames of the verse starting on beat v: start, 'ardinda misin?', 'Ce-ee!', dance, next verse."""
+    return fr(v), fr(v + 3.4), fr(v + 5), fr(v + 10), fr(v + 16)
+
+
+def round_jump(v, kind, x0, seed, s, hide):
+    """The friend hides behind something, peeks over the top, and on 'Ce-ee!' jumps out over it."""
+    A, P, C, D, E = verse(v)
     car = Car(kind); area(x0, seed, hide=(0, 1.6))
     hb = hide(x0, 1.6)
     car.place(0, x0 + 0.2 * s, 4.3, -90, cut=False); car.mouth(0, False)
-    seeker(f0, f0 + 54)
-    a = f0 + 54
-    shot(a, a + 60, (x0 + 0.4 * s, -11.0, 1.5), (x0 + 0.2 * s, 1.0, 2.6), (x0 + 0.6 * s, -9.8, 1.5), (x0 + 0.4 * s, 1.0, 2.6), lens=32)
-    for f in range(a + 6, a + 44, 5):                       # the hiding place shakes
-        key(hb, "rotation_euler", f, (0, R(4) * (1 if (f // 5) % 2 else -1), 0)); key(hb, "scale", f, (1.03, 1.0, 0.98) if (f // 5) % 2 else (0.98, 1, 1.03))
-    key(hb, "rotation_euler", a + 46, (0, 0, 0)); key(hb, "scale", a + 46, (1, 1, 1))
-    key(car.b, "location", a + 14, (0, 0, 0)); key(car.b, "location", a + 24, (0, 0, 2.0)); car.look(a + 26, -1); car.look(a + 36, 1)
-    car.blink(a + 31); key(car.b, "location", a + 40, (0, 0, 2.0)); key(car.b, "location", a + 46, (0, 0, 0))
-    b = a + 60                                              # jump out
-    two_shot(b, x0, s, 114)
+    seeker(A, P)
+    shot(P, C, (x0 + 0.4 * s, -11.0, 1.5), (x0 + 0.2 * s, 1.0, 2.6), (x0 + 0.6 * s, -10.2, 1.5), (x0 + 0.4 * s, 1.0, 2.6), lens=32)
+    for f in range(P + 1, C - 2, 3):                       # the hiding place shakes
+        key(hb, "rotation_euler", f, (0, R(4) * (1 if (f // 3) % 2 else -1), 0)); key(hb, "scale", f, (1.03, 1.0, 0.98) if (f // 3) % 2 else (0.98, 1, 1.03))
+    key(hb, "rotation_euler", C, (0, 0, 0)); key(hb, "scale", C, (1, 1, 1))
+    key(car.b, "location", P + 3, (0, 0, 0)); key(car.b, "location", P + 11, (0, 0, 2.0)); car.look(P + 13, -1); car.look(P + 19, 1)
+    car.blink(P + 16)
+    # "Ce-ee!": out it jumps
+    two_shot(C, x0, s, E)
     lx, ly = x0 + 1.8 * s, -2.0
-    car.root.keyframe_insert("location", frame=b + 2); car.root.keyframe_insert("rotation_euler", frame=b + 2)
+    car.root.keyframe_insert("location", frame=C); car.root.keyframe_insert("rotation_euler", frame=C)
     car.root.location = (lx, ly, 0); car.root.rotation_euler = (0, 0, R(-90 - 14 * s)); car.pos = (lx, ly); car.rz = -90 - 14 * s
-    car.root.keyframe_insert("location", frame=b + 18); car.root.keyframe_insert("rotation_euler", frame=b + 18)
-    key(car.b, "location", b + 2, (0, 0, 0)); key(car.b, "location", b + 10, (0, 0, 3.4)); key(car.b, "location", b + 18, (0, 0, 0))
-    key(car.b, "rotation_euler", b + 2, (0, 0, 0)); key(car.b, "rotation_euler", b + 10, (0, R(-14), 0)); key(car.b, "rotation_euler", b + 18, (0, 0, 0))
-    car.squash(b + 19, 0.2); car.mouth(b + 12, True); car.big_eyes(b + 12, 10); car.look(b + 12, 0)
-    stars((lx, ly - 0.3, 2.2), b + 19, seed=seed)
-    car.blink(b + 34)
-    found(car, b + 22, x0, s)
-    return car, b + 114
+    car.root.keyframe_insert("location", frame=C + 15); car.root.keyframe_insert("rotation_euler", frame=C + 15)
+    key(car.b, "location", C, (0, 0, 2.0)); key(car.b, "location", C + 7, (0, 0, 3.4)); key(car.b, "location", C + 15, (0, 0, 0))
+    key(car.b, "rotation_euler", C, (0, 0, 0)); key(car.b, "rotation_euler", C + 7, (0, R(-14), 0)); key(car.b, "rotation_euler", C + 15, (0, 0, 0))
+    car.squash(C + 16, 0.2); car.mouth(C + 2, True); car.big_eyes(C + 2, 12); car.look(C + 2, 0)
+    stars((lx, ly - 0.3, 2.2), C + 16, seed=seed)
+    car.blink(C + 30)
+    found(car, C, D, E, x0, s)
+    return car
 
 
-def round_slide(f0, kind, x0, seed, s, hide):
-    """The friend hides behind something, slides out to peek, hides again, then drives out."""
+def round_slide(v, kind, x0, seed, s, hide):
+    """The friend hides behind something, slides out to peek, and on 'Ce-ee!' drives out."""
+    A, P, C, D, E = verse(v)
     car = Car(kind); area(x0, seed, hide=(0, 1.6))
     hs = hide(x0, 1.6)
     h0 = 0 if s > 0 else 180
     car.place(0, x0 - 0.2 * s, 4.0, h0, cut=False); car.mouth(0, False)
-    seeker(f0, f0 + 50)
-    a = f0 + 50
-    shot(a, a + 64, (x0 + 0.4 * s, -11.4, 1.5), (x0 + 0.4 * s, 1.0, 2.5), (x0 + 1.0 * s, -10.2, 1.5), (x0 + 1.0 * s, 0.9, 2.4), lens=32)
-    car.move(a + 8, a + 22, x0 + 2.4 * s, 4.0); car.look(a + 24, 0, 0); car.turn(a + 20, a + 28, h0 - 55 * s)
-    car.blink(a + 32); car.look(a + 38, s); car.big_eyes(a + 40, 6)
-    car.turn(a + 48, a + 52, h0); car.move(a + 50, a + 60, x0 - 0.2 * s, 4.0, back=True)
-    for f in range(a + 6, a + 26, 5):
-        key(hs, "scale", f, (1.03, 1, 0.98) if (f // 5) % 2 else (0.98, 1, 1.03))
-    key(hs, "scale", a + 28, (1, 1, 1))
-    b = a + 64
-    two_shot(b, x0, s, 114)
-    car.move(b + 2, b + 20, x0 + 4.2 * s, 3.2, h0 - 45 * s)
-    car.move(b + 20, b + 40, x0 + 1.9 * s, -2.0, h0 - 112 * s)
-    car.squash(b + 42, 0.14); car.mouth(b + 30, True); car.big_eyes(b + 30, 10); car.look(b + 30, 0)
-    stars((x0 + 1.9 * s, -2.4, 2.0), b + 42, seed=seed)
-    found(car, b + 26, x0, s)
-    return car, b + 114
+    seeker(A, P)
+    shot(P, C, (x0 + 0.4 * s, -11.4, 1.5), (x0 + 0.4 * s, 1.0, 2.5), (x0 + 0.8 * s, -10.6, 1.5), (x0 + 0.8 * s, 0.9, 2.4), lens=32)
+    car.move(P + 1, P + 10, x0 + 2.3 * s, 4.0); car.turn(P + 8, P + 14, h0 - 55 * s); car.look(P + 14, s); car.blink(P + 18)
+    for f in range(P + 1, P + 12, 3):
+        key(hs, "scale", f, (1.03, 1, 0.98) if (f // 3) % 2 else (0.98, 1, 1.03))
+    key(hs, "scale", P + 13, (1, 1, 1))
+    two_shot(C, x0, s, E)
+    car.move(C + 1, C + 12, x0 + 4.2 * s, 3.2, h0 - 45 * s)
+    car.move(C + 12, C + 28, x0 + 1.9 * s, -2.0, h0 - 112 * s)
+    car.squash(C + 29, 0.14); car.mouth(C + 2, True); car.big_eyes(C + 2, 12); car.look(C + 4, 0)
+    stars((x0 + 1.9 * s, -2.4, 2.0), C + 29, seed=seed)
+    found(car, C, D, E, x0, s)
+    return car
 
 
-f = 96
-c1, f = round_jump(f, "portakal", 40.0, 2, 1, lambda x, y: bush(x, y, 2.0, 11))
-c2, f = round_slide(f, "muz", 80.0, 3, -1, lambda x, y: haystack(x, y, 1.0))
-c3, f = round_jump(f, "ananas", 120.0, 4, -1, lambda x, y: mushroom(x, y, 1.15))
-c4, f = round_slide(f, "uzum", 160.0, 5, 1, lambda x, y: bush(x, y, 2.0, 21))
-c5, f = round_jump(f, "armut", 200.0, 6, 1, lambda x, y: haystack(x, y, 1.0))
+c1 = round_jump(16, "portakal", 40.0, 2, 1, lambda x, y: bush(x, y, 2.0, 11))
+c2 = round_slide(32, "muz", 80.0, 3, -1, lambda x, y: haystack(x, y, 1.0))
+c3 = round_jump(48, "ananas", 120.0, 4, -1, lambda x, y: mushroom(x, y, 1.15))
+c4 = round_slide(64, "uzum", 160.0, 5, 1, lambda x, y: bush(x, y, 2.0, 21))
+c5 = round_jump(80, "armut", 200.0, 6, 1, lambda x, y: haystack(x, y, 1.0))
 
-# --- finale: everybody dances together
-F0 = f // BEAT * BEAT
+# --- finale (beat 96): "Meyve arabalar dans ediyor, zipla, salla, don, hey hey hey!"
+F0 = fr(96)
 XF = 240.0
 area(XF, 9)
 cars = [truck, c1, c2, c3, c4, c5]
 spots = [(0.0, -3.0, -90), (-2.9, -2.6, -72), (2.9, -2.6, -108), (-3.1, 2.6, -80), (0.0, 3.0, -90), (3.1, 2.6, -100)]
 order = [truck, c1, c5, c3, c2, c4]
+T = lambda sec: int(round(sec * FPS))
 for i, (c, (dx, dy, rz)) in enumerate(zip(order, spots)):
     c.place(F0, XF + dx, dy, rz)
     c.d.rotation_euler = (0, 0, 0); c.d.keyframe_insert("rotation_euler", frame=F0)
     c.mouth(F0 + 2, True); c.look(F0 + 2, 0, dur=1)
-    c.dance(F0, N - 30, spin=False, phase=i)
-    c.blink(F0 + 40 + i * 7); c.blink(F0 + 120 + i * 5)
-    c.hop(N - 26, 1.0, 14, 1)
+    c.dance(F0, fr(100) - 1, spin=False, phase=i, end_jump=False)          # "Meyve arabalar dans ediyor"
+    c.blink(F0 + 10 + i * 5)
+    d = c.d                                                                 # "Zipla" - one big jump
+    key(d, "location", T(59.3) - 3, (0, 0, 0)); key(d, "scale", T(59.3) - 3, (1.12, 1.12, 0.82))
+    key(d, "location", T(59.3) + 4, (0, 0, 1.2)); key(d, "scale", T(59.3) + 4, (0.92, 0.92, 1.12))
+    key(d, "location", T(59.3) + 10, (0, 0, 0)); key(d, "scale", T(59.3) + 10, (1.12, 1.12, 0.84)); key(d, "scale", T(59.3) + 13, (1, 1, 1))
+    key(d, "rotation_euler", T(59.75) - 2, (0, 0, 0))                     # "salla" - shake
+    for k_ in range(3):
+        key(d, "rotation_euler", T(59.75) + k_ * 2, (R(14) * (1 if k_ % 2 else -1), 0, 0))
+    key(d, "rotation_euler", T(60.0), (0, 0, 0))
+    key(d, "rotation_euler", T(60.45), (0, 0, 2 * math.pi))               # "don" - a spin
+    d.rotation_euler = (0, 0, 0); d.keyframe_insert("rotation_euler", frame=T(60.45) + 1)
+    for k_, hs in enumerate((60.5, 61.05, 61.5)):                           # "hey hey hey!"
+        a = T(hs) - 4
+        key(d, "location", a, (0, 0, 0)); key(d, "scale", a, (1.12, 1.12, 0.82))
+        key(d, "location", a + 5, (0, 0, 0.7 + 0.35 * k_)); key(d, "scale", a + 5, (0.94, 0.94, 1.1))
+        key(d, "location", a + 10 + (6 if k_ == 2 else 0), (0, 0, 0)); key(d, "scale", a + 10 + (6 if k_ == 2 else 0), (1.1, 1.1, 0.86))
+    key(d, "scale", T(61.5) + 14, (1, 1, 1))
+    c.big_eyes(T(61.5) - 4, 18)
 shot(F0, N, (XF, -15.5, 9.0), (XF, 0.0, 1.6), (XF, -13.2, 7.6), (XF, 0.0, 1.6), lens=32)
 confetti((XF, -1.0, 0), F0 + 6, n=90, seed=5, spread=6.0, top=10.5)
-confetti((XF, -1.0, 0), F0 + 96, n=90, seed=8, spread=6.0, top=10.5)
-for j, ff in enumerate(range(F0 + 12, N - 20, 36)):
-    stars((XF + (-2.5, 2.5, 0)[j % 3], -2.0, 4.6), ff, n=10, seed=40 + j, spread=2.4, col=((1.0, 0.85, 0.1), (1.0, 0.4, 0.7), (0.3, 0.8, 1.0))[j % 3])
+confetti((XF, -1.0, 0), T(60.5), n=90, seed=8, spread=6.0, top=10.5)
+for j, sec in enumerate((57.9, 58.5, 59.3, 60.5, 61.05, 61.5)):
+    stars((XF + (-2.5, 2.5, 0)[j % 3], -2.0, 4.6), T(sec), n=10, seed=40 + j, spread=2.4, col=((1.0, 0.85, 0.1), (1.0, 0.4, 0.7), (0.3, 0.8, 1.0))[j % 3])
 f = N
+
+# --- the song goes into the file, so a render writes the video with sound
+if os.path.exists(SONG):
+    se = S.sequence_editor_create()
+    snd = se.strips.new_sound("sarki", SONG, 1, 0)
+    snd.sound.pack()
+    S.render.ffmpeg.audio_codec = "AAC"; S.render.ffmpeg.audio_bitrate = 192
+else:
+    print("NO SONG", SONG)
 
 # --- nothing may ever go through anything else: check the cars against each other on every frame
 def footprints():
