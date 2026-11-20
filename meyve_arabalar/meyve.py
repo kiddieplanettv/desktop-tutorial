@@ -904,14 +904,14 @@ F0 = fr(96)
 XF = 240.0
 area(XF, 9)
 cars = [truck, c1, c2, c3, c4, c5]
-spots = [(0.0, -3.0, -90), (-2.9, -2.6, -72), (2.9, -2.6, -108), (-3.1, 2.6, -80), (0.0, 3.0, -90), (3.1, 2.6, -100)]
+spots = [(0.0, -3.0, -90), (-2.9, -2.8, -90), (2.9, -2.8, -90), (-3.1, 2.6, -90), (0.0, 2.8, -90), (3.1, 2.6, -90)]
 order = [truck, c1, c5, c3, c2, c4]
 T = lambda sec: int(round(sec * FPS))
 for i, (c, (dx, dy, rz)) in enumerate(zip(order, spots)):
     c.place(F0, XF + dx, dy, rz)
     c.d.rotation_euler = (0, 0, 0); c.d.keyframe_insert("rotation_euler", frame=F0)
     c.mouth(F0 + 2, True); c.look(F0 + 2, 0, dur=1)
-    c.dance(F0, fr(100) - 1, spin=False, phase=i, end_jump=False)          # "Meyve arabalar dans ediyor"
+    c.dance(F0, fr(100) - 1, spin=False, phase=0, end_jump=False)          # "Meyve arabalar dans ediyor" - all in step
     c.blink(F0 + 10 + i * 5)
     d = c.d                                                                 # "Zipla" - one big jump
     key(d, "location", T(59.3) - 3, (0, 0, 0)); key(d, "scale", T(59.3) - 3, (1.12, 1.12, 0.82))
@@ -921,8 +921,8 @@ for i, (c, (dx, dy, rz)) in enumerate(zip(order, spots)):
     for k_ in range(3):
         key(d, "rotation_euler", T(59.75) + k_ * 2, (R(14) * (1 if k_ % 2 else -1), 0, 0))
     key(d, "rotation_euler", T(60.0), (0, 0, 0))
-    key(d, "rotation_euler", T(60.45), (0, 0, 2 * math.pi))               # "don" - a spin
-    d.rotation_euler = (0, 0, 0); d.keyframe_insert("rotation_euler", frame=T(60.45) + 1)
+    # "don": everybody turns together, right then left (all at the same time, so the cargo beds never meet)
+    key(d, "rotation_euler", T(60.2), (0, 0, R(30))); key(d, "rotation_euler", T(60.45), (0, 0, R(-30))); key(d, "rotation_euler", T(60.65), (0, 0, 0))
     for k_, hs in enumerate((60.5, 61.05, 61.5)):                           # "hey hey hey!"
         a = T(hs) - 4
         key(d, "location", a, (0, 0, 0)); key(d, "scale", a, (1.12, 1.12, 0.82))
@@ -930,7 +930,7 @@ for i, (c, (dx, dy, rz)) in enumerate(zip(order, spots)):
         key(d, "location", a + 10 + (6 if k_ == 2 else 0), (0, 0, 0)); key(d, "scale", a + 10 + (6 if k_ == 2 else 0), (1.1, 1.1, 0.86))
     key(d, "scale", T(61.5) + 14, (1, 1, 1))
     c.big_eyes(T(61.5) - 4, 18)
-shot(F0, N, (XF, -15.5, 9.0), (XF, 0.0, 1.6), (XF, -13.2, 7.6), (XF, 0.0, 1.6), lens=32)
+shot(F0, N, (XF, -15.5, 9.0), (XF, 0.0, 1.6), (XF, -14.4, 8.2), (XF, 0.0, 1.6), lens=32)
 confetti((XF, -1.0, 0), F0 + 6, n=90, seed=5, spread=6.0, top=10.5)
 confetti((XF, -1.0, 0), T(60.5), n=90, seed=8, spread=6.0, top=10.5)
 for j, sec in enumerate((57.9, 58.5, 59.3, 60.5, 61.05, 61.5)):
@@ -949,7 +949,7 @@ else:
 # --- nothing may ever go through anything else: check the cars against each other on every frame
 def footprints():
     def rect(c):
-        m = c.root.matrix_world; L, W = c.sp["L"], c.sp["W"]
+        m = c.b.matrix_world; L, W = c.sp["L"], c.sp["W"]          # includes the dance and hop layers
         return [(m @ Vector(p)).xy for p in ((L / 2, W / 2, 0), (L / 2, -W / 2, 0), (-c.reach, -W / 2, 0), (-c.reach, W / 2, 0))]
 
     def apart(A, B):
@@ -961,7 +961,7 @@ def footprints():
                     return True
         return False
     bad = 0
-    for fr in range(0, N, 2):
+    for fr in range(0, N):
         S.frame_set(fr)
         Rs = [(c.kind, rect(c)) for c in cars]
         for i in range(len(Rs)):
