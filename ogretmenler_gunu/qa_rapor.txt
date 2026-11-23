@@ -1,0 +1,11 @@
+HATA FİLTRESİ RAPORU
+========================================
+TAMAM: Kare aralığı 1-2220 (74.00 sn, 30 fps)
+TAMAM: Ses dosyası var: sarki.m4a
+TAMAM: Şarkı süresi sahne ile uyumlu (2220 kare)
+TAMAM: 62 karaoke görseli yerinde
+TAMAM: Her kelime söylenirken ilgili satır ekranda ve vurgulu
+TAMAM: 27 çekim, ortalama 2.7 sn
+TAMAM: Kamera hareketleri çekim içinde akıcı (geri sekme yok)
+TAMAM: Kamera hiçbir nesnenin içine girmiyor
+Özet: 0 hata, 0 uyarı
