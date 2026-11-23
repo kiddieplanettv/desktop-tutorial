@@ -527,7 +527,7 @@ def make_train():
     for x in (0.2, 1.3, 2.3):
         obj("Lok_bant", cyl_mesh(0.99, 0.14, bev=0.03), (x, 0, 2.0), (0, math.radians(90), 0), 1.0, my, loco)
     obj("Lok_yuzdisk", cyl_mesh(0.92, 0.16, bev=0.06), (2.62, 0, 2.0), (0, math.radians(90), 0), 1.0,
-        mat("Tren_Yuz", "#FFD49A", 0.45), loco)
+        mat("Tren_Yuz", "#FFF0DA", 0.5, emit=0.22), loco)
     face(loco, (2.72, 0, 2.18), 1.05, "Tren_yuz", eye_gap=0.3, mouth_drop=0.45)
     box("Lok_kabin", (1.9, 2.1, 2.2), (-1.55, 0, 2.15), mr, 0.18, loco)
     box("Lok_cati", (2.4, 2.5, 0.26), (-1.55, 0, 3.35), my, 0.1, loco)
